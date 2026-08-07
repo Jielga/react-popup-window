@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist-docs/
+coverage/
+playwright-report/
+test-results/
+*.local
+.DS_Store
