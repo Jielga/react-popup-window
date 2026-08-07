@@ -88,8 +88,8 @@ function FiltersForm({
         Only active
       </label>
       <p className="muted" style={{ fontSize: '0.78rem' }}>
-        These filters run in the main window and pre-filter the grid's data — the grid's own column
-        filters, sorting, selection and column manager come on top.
+        These filters run in the main window and pre-filter the grid data. The grid's own column
+        filters, sorting and selection apply on top.
       </p>
     </form>
   )

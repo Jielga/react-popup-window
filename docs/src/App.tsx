@@ -19,7 +19,7 @@ function Dashboard() {
     <>
       <button onClick={open}>Open in new window</button>
       <Popup>
-        {/* Rendered inside the popup window, but still part of THIS
+        {/* Rendered into the popup window while remaining part of this
             component tree: state, context and events keep working. */}
         <MyPanel />
       </Popup>
@@ -118,8 +118,9 @@ function AppInner() {
         <header className="site-header">
           <h1>@jielga/react-popup-window</h1>
           <p className="tagline">
-            A React hook that opens part of your UI in a separate browser window — rendered with a
-            portal so state, context and event handlers keep working across windows.
+            A React hook for rendering part of a component tree in a separate browser window.
+            Content is rendered through a portal, so state, context and event handlers work across
+            windows.
           </p>
           <div className="header-links">
             <a href="https://github.com/jielga/react-popup-window">GitHub</a>
@@ -146,19 +147,18 @@ function AppInner() {
         <section>
           <h2>Examples</h2>
           <p className="muted">
-            Everything below runs live on this page. Tip: toggle dark mode above with a popup open —
-            the popup follows, because stylesheets and root <code>class</code> attributes are kept
-            in sync.
+            All examples run live on this page. Toggling dark mode while a popup is open
+            demonstrates stylesheet and root-attribute synchronization.
           </p>
 
           <div className="card">
             <h3>Detached data grid (TMDataGrid + TanStack Query)</h3>
             <p>
-              A <a href="https://github.com/Jielga/TMDataGrid">@jielga/tmdatagrid</a> grid getting
-              its data from <code>useQuery</code>. Both the <code>QueryClientProvider</code> and the{' '}
-              <code>MantineProvider</code> the grid requires are mounted once, in this window's tree
-              — the popup content reaches them through normal React context, because the portal
-              keeps the content in the same tree. While detached, the main window hides the grid.
+              A <a href="https://github.com/Jielga/TMDataGrid">@jielga/tmdatagrid</a> grid backed by{' '}
+              <code>useQuery</code>. The <code>QueryClientProvider</code> and the{' '}
+              <code>MantineProvider</code> the grid requires are mounted once, in the main window's
+              tree; the popup content reaches them through React context. While detached, the main
+              window hides the grid.
             </p>
             <div className="demo">
               <DataTableExample />
@@ -173,12 +173,12 @@ function AppInner() {
             <p>
               Built with{' '}
               <a href="https://github.com/bvaughn/react-resizable-panels">react-resizable-panels</a>{' '}
-              and <a href="https://github.com/Jielga/TMDataGrid">@jielga/tmdatagrid</a>: the left
-              panel holds the query form, the right panel a grid with 400 virtualized rows —
+              and <a href="https://github.com/Jielga/TMDataGrid">@jielga/tmdatagrid</a>. The left
+              panel holds the query form; the right panel holds a grid with 400 virtualized rows,
               sortable, resizable, reorderable and pinnable columns, column filters, row selection,
-              and a drag-selectable cell range with Ctrl+C. Popping the results out collapses the
-              panel to a control strip (focus / bring back) — and because the filter state lives in
-              the main window, editing filters updates the popped-out grid live.
+              and a drag-selectable cell range. Opening the results in a new window collapses the
+              panel to a control strip with focus and close actions. The filter state lives in the
+              main window, so editing filters updates the popped-out grid.
             </p>
             <div className="demo">
               <PanelsExample />
@@ -192,10 +192,11 @@ function AppInner() {
             <h3>UI libraries that portal to document.body</h3>
             <p>
               Component libraries render menus, popovers and tooltips through portals into{' '}
-              <code>document.body</code> — which is the <em>main</em> window's body, even for
-              components inside the popup. Mantine reads portal defaults from its theme, so a small
-              wrapper redirects portals to whichever document the content is rendered in. The grids
-              above use it — open a column menu in a popped-out grid and it stays in the popup.
+              <code>document.body</code>, which is the main window's body even for components
+              rendered inside the popup. Mantine reads portal defaults from its theme, so a small
+              wrapper can redirect portals to the document its children are rendered in. The grids
+              on this page use this wrapper; a column menu opened in a popped-out grid stays in the
+              popup window.
             </p>
             <pre>
               <code>{PORTAL_TARGET_SNIPPET}</code>
@@ -203,10 +204,10 @@ function AppInner() {
           </div>
 
           <div className="card">
-            <h3>Shared state &amp; events</h3>
+            <h3>Shared state and events</h3>
             <p>
-              A counter whose state lives in the main window. The <code>+1</code> button rendered in
-              the popup updates it directly — no messaging, no syncing.
+              A counter whose state is owned by a component in the main window. The button rendered
+              in the popup updates that state directly, without messaging or synchronization.
             </p>
             <div className="demo">
               <CounterExample />
@@ -214,13 +215,13 @@ function AppInner() {
           </div>
 
           <div className="card">
-            <h3>No messaging needed</h3>
+            <h3>Communication</h3>
             <p>
-              There is no message channel in this library — on purpose. Popup content stays in your
-              component tree and your JS realm, so props, state and context <em>are</em> the
-              communication. If you ever host non-React scripts inside the popup document itself,
-              the raw <code>popupWindow</code> handle is the escape hatch for{' '}
-              <code>postMessage</code>.
+              The library provides no message channel. Popup content remains part of the calling
+              component tree and executes in the opener's JavaScript realm, so props, state and
+              context are the communication mechanism. For non-React scripts hosted in the popup
+              document itself, the <code>popupWindow</code> handle supports standard{' '}
+              <code>postMessage</code> interoperation.
             </p>
           </div>
         </section>
@@ -252,8 +253,8 @@ function AppInner() {
                   <code>open()</code>
                 </td>
                 <td>
-                  Opens the popup (focuses if already open). Call from a user gesture or the browser
-                  will block it. Returns the <code>Window</code> or <code>null</code>.
+                  Opens the popup, or focuses it if already open. Must be called from a user
+                  gesture. Returns the <code>Window</code>, or <code>null</code> when blocked.
                 </td>
               </tr>
               <tr>
@@ -283,23 +284,23 @@ function AppInner() {
         </section>
 
         <section>
-          <h2>Good to know</h2>
+          <h2>Limitations</h2>
           <ul>
             <li>
-              Browsers no longer allow hiding the address bar completely — <code>popup: true</code>{' '}
-              (the default) gives the most minimal chrome the platform allows.
+              Browsers do not allow hiding the address bar entirely. <code>popup: true</code> (the
+              default) requests the minimal window chrome the platform provides.
             </li>
             <li>
-              <code>open()</code> must run in response to a user gesture, otherwise popup blockers
-              step in (<code>isBlocked</code> tells you when they did).
+              <code>open()</code> must be called from a user gesture; otherwise the popup blocker
+              intervenes and <code>isBlocked</code> is set.
             </li>
             <li>
-              The popup closes automatically when the component that owns the hook unmounts, and
-              when the main window unloads.
+              The popup closes when the component that owns the hook unmounts and when the main
+              window unloads.
             </li>
             <li>
-              Popup content remounts when moving between windows — lift state you want to keep (as
-              the examples here do) into the owning component or a store.
+              Popup content unmounts and remounts when it moves between windows. State that should
+              survive detaching belongs in the owning component or an external store.
             </li>
           </ul>
         </section>

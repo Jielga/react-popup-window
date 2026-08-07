@@ -28,8 +28,8 @@ export function CounterExample() {
         <div className="popup-panel">
           <h2>Popup counter</h2>
           <p>
-            This button lives in the popup window but its <code>onClick</code> updates state in the
-            main window's component — same tree, same state.
+            This button is rendered in the popup window. Its <code>onClick</code> updates state
+            owned by a component in the main window; both windows render the same value.
           </p>
           <div className="row">
             <button onClick={() => setCount((c) => c + 1)} data-testid="increment">

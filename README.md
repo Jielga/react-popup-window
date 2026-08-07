@@ -2,24 +2,36 @@
 
 [![CI](https://github.com/jielga/react-popup-window/actions/workflows/ci.yml/badge.svg)](https://github.com/jielga/react-popup-window/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/%40jielga%2Freact-popup-window)](https://www.npmjs.com/package/@jielga/react-popup-window)
+[![license](https://img.shields.io/npm/l/%40jielga%2Freact-popup-window)](./LICENSE)
 
-A React hook that opens part of your UI in a separate browser popup window — an
-"open in new window" panel. The content is rendered with a **portal into the
-popup's document**, so it stays part of your component tree: state, context
-(TanStack Query, Redux, themes, routers, …) and event handlers all keep working
-across windows.
+React hook for rendering part of a component tree in a separate browser
+window. Content is rendered through a portal into the popup document, so it
+remains part of the calling tree: state, context, and event handlers work
+across windows without bridging.
 
-**[Live docs & examples →](https://jielga.github.io/react-popup-window/)**
+[Documentation and live examples](https://jielga.github.io/react-popup-window/)
 
-## Install
+## Features
+
+- Portal-based rendering — popup content keeps access to all ancestor
+  context (state managers, data fetching, theming, routing)
+- Stylesheet synchronization — `<style>` and `<link>` elements, root
+  `class`/`data-*` attributes, and `adoptedStyleSheets` are mirrored into
+  the popup and kept current while it is open
+- Lifecycle management — detects the user closing the window, closes the
+  popup on owner unmount and opener unload, reports blocked popups
+- No dependencies beyond `react` and `react-dom`
+- TypeScript, ESM and CJS builds, SSR-safe
+
+## Installation
 
 ```sh
 npm install @jielga/react-popup-window
 ```
 
-Requires React 19.2+.
+Requires React 19.2 or later.
 
-## Quick start
+## Usage
 
 ```tsx
 import { usePopupWindow } from '@jielga/react-popup-window'
@@ -34,8 +46,6 @@ function Dashboard() {
     <>
       <button onClick={open}>Open in new window</button>
       <Popup>
-        {/* Rendered inside the popup window, but still part of THIS
-            component tree: state, context and events keep working. */}
         <MyPanel />
       </Popup>
     </>
@@ -43,23 +53,30 @@ function Dashboard() {
 }
 ```
 
-### Detach a section (hide it in the main window while popped out)
+`Popup` renders its children into the popup window while open and nothing
+otherwise. It has a stable identity and can be destructured from the hook
+result.
+
+### Detaching a section
+
+To hide a section in the main window while it is popped out, render it in
+one of two places depending on `isOpen`:
 
 ```tsx
 const { open, close, focus, isOpen, Popup } = usePopupWindow({ title: 'People' })
 
-const table = <DataTable /> // may use useQuery(), useContext(), anything
+const table = <DataTable />
 
 return (
   <>
     {isOpen ? (
-      <p>
-        Table is open in another window — <button onClick={focus}>focus</button>{' '}
-        <button onClick={close}>bring it back</button>
-      </p>
+      <div>
+        <button onClick={focus}>Focus window</button>
+        <button onClick={close}>Bring back</button>
+      </div>
     ) : (
       <>
-        <button onClick={open}>Open table in new window</button>
+        <button onClick={open}>Open in new window</button>
         {table}
       </>
     )}
@@ -68,124 +85,161 @@ return (
 )
 ```
 
-## Why a portal (and not moving a DOM node)?
+`isOpen` also updates when the user closes the window directly, so the
+inline branch is restored in every case.
 
-Two things make "render React content in another window" tricky:
+## How it works
 
-1. **Moving a DOM node breaks React events.** Since React 17, event listeners
-   are delegated on the React *root container* in the main document. A node
-   physically moved into another document stops receiving `onClick` & friends.
-2. **Rendering a separate React root in the popup loses your tree.** State and
-   context would need to be bridged manually.
+The hook opens a same-origin `about:blank` window and creates a container
+element in its body. The `Popup` component renders its children with
+`createPortal` into that container. A portal changes where DOM output is
+placed, not where the components sit in the tree, so popup content
+participates in the calling tree's state, context, and event system. React
+supports cross-document portals: it attaches its event delegation to the
+portal container when the container belongs to another document.
 
-`createPortal` into the popup's document avoids both: React officially supports
-cross-document portals (it attaches its event delegation to the portal
-container when it lives in another document), and the content never leaves your
-component tree — which is exactly why providers like TanStack Query's
-`QueryClientProvider` "just work" in the popup with zero configuration.
+Physically moving DOM nodes into another document is not a viable
+alternative: React delegates events on the root container in the main
+document, and a node moved elsewhere stops receiving synthetic events.
+
+The popup document runs no JavaScript of its own. All rendering and event
+handling execute in the opener window.
 
 ## API
 
-### `usePopupWindow(options?): PopupWindowApi`
+### `usePopupWindow(options?)`
 
 ```ts
 interface UsePopupWindowOptions {
-  title?: string // popup document title (default: opener's title)
-  name?: string // window.open target name (default: '_blank')
-  features?: PopupWindowFeatures // default: { popup: true, width: 640, height: 480 }
-  center?: boolean // center over the opener window (default: true)
-  copyStyles?: boolean // mirror + live-sync stylesheets (default: true)
+  /** Popup document title. Defaults to the opener document's title. */
+  title?: string
+  /** window.open target name. The same name reuses the window. Default: '_blank'. */
+  name?: string
+  /** window.open features, merged over { popup: true, width: 640, height: 480 }. */
+  features?: PopupWindowFeatures
+  /** Center the popup over the opener when no left/top feature is given. Default: true. */
+  center?: boolean
+  /** Mirror and synchronize stylesheets into the popup. Default: true. */
+  copyStyles?: boolean
+  /** Called after the popup window is opened and prepared. */
   onOpen?: (popupWindow: Window) => void
-  onClose?: () => void // close(), user close, or opener unload
-  onBlocked?: () => void // window.open returned null
+  /** Called when the popup closes: close(), user close, or opener unload. */
+  onClose?: () => void
+  /** Called when window.open returns null (popup blocked). */
+  onBlocked?: () => void
 }
 ```
 
 Returns:
 
-| Member                                | Description                                                                                                                                  |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Popup`                               | Portal component (stable identity). Renders children into the popup while open, nothing otherwise.                                            |
-| `open()`                              | Opens the popup, or focuses it if already open. Call from a user gesture, or popup blockers step in. Returns the `Window` or `null`.          |
-| `close()`                             | Closes the popup. No-op when closed.                                                                                                          |
-| `toggle()`                            | Open if closed, close if open.                                                                                                                |
-| `focus()`                             | Focuses the popup window.                                                                                                                     |
-| `isOpen`                              | Reactive boolean.                                                                                                                             |
-| `isBlocked`                           | `true` when the last `open()` was blocked by the browser.                                                                                     |
-| `popupWindow`                         | The raw `Window` while open, else `null`.                                                                                                     |
-
-### Communicating with popup content
-
-You don't. There is nothing to communicate *across* — popup content stays in
-your component tree and your JS realm, so props, state and context (TanStack
-Query, Redux, …) already cover it, exactly like any other component.
-
-The one exception is scripts that live in the popup's own document (e.g. a
-non-React widget you inject into `popupWindow.document`). Those run in the
-popup's realm and can talk to your app via standard `postMessage` — the raw
-`popupWindow` handle is the escape hatch for that. Note that calling
-`opener.postMessage` from a portal event handler won't look like a popup
-message: portal handlers run in the main window's realm, so the browser stamps
-the main window as `event.source`. Only code hosted in the popup document
-posts *as* the popup.
-
-### Style syncing
-
-While the popup is open the library mirrors, and keeps in sync:
-
-- `<style>` and `<link rel="stylesheet">` elements (additions, removals and
-  text edits — covers Vite HMR, lazily loaded chunk CSS and CSS-in-JS;
-  `<style>` contents are serialized from the CSSOM so `insertRule`-based
-  libraries work too),
-- `class`/`style`/`data-*` attributes on `<html>` and `<body>` (so theme
-  classes like `dark` propagate),
-- `document.adoptedStyleSheets`.
-
-Set `copyStyles: false` to opt out.
+| Member        | Type                       | Description                                                                                       |
+| ------------- | -------------------------- | ------------------------------------------------------------------------------------------------- |
+| `Popup`       | `FC<{ children? }>`        | Portal component. Renders children into the popup while open.                                      |
+| `open`        | `() => Window \| null`     | Opens the popup, or focuses it if already open. Returns `null` when blocked. Requires a user gesture. |
+| `close`       | `() => void`               | Closes the popup.                                                                                  |
+| `toggle`      | `() => void`               | Opens if closed, closes if open.                                                                   |
+| `focus`       | `() => void`               | Focuses the popup window.                                                                          |
+| `isOpen`      | `boolean`                  | Whether the popup is open.                                                                         |
+| `isBlocked`   | `boolean`                  | Whether the last `open()` call was blocked.                                                        |
+| `popupWindow` | `Window \| null`           | The popup `Window` while open.                                                                     |
 
 ### `copyStyles(source, target, watch?)`
 
-The style mirroring is exported standalone in case you manage your own window:
-returns a `stop()` function.
+The style synchronization used by the hook, exported for windows managed
+outside of it. Copies stylesheets from `source` to `target` and, when
+`watch` is true (default), observes the source document for changes.
+Returns a function that stops observing.
 
-## Good to know
+## Style synchronization
 
-- **Address bar:** browsers no longer allow hiding it completely (anti
-  phishing). `popup: true` — the default — gives the most minimal chrome the
-  platform allows: no tabs, no toolbar, a slim read-only URL strip.
-- **User gesture required:** call `open()` from a click handler; `isBlocked` /
-  `onBlocked` tell you when a blocker intervened.
-- **Lifecycle:** the popup closes automatically when the owning component
-  unmounts and when the main window unloads. Closing the window by hand is
-  detected (`isOpen` flips, `onClose` fires) and the portal unmounts.
-- **Remounting:** popup content unmounts/remounts when it moves between
-  windows. Keep state you care about in the owning component (like the
-  examples do) or in a store.
-- **SSR-safe:** the hook touches `window` only inside `open()`.
-- **UI libraries that portal to `document.body`** (Mantine, Radix, MUI, …):
-  their menus, popovers and tooltips mount into the *main* window's body, even
-  for components rendered in the popup. Give those portals a target inside the
-  popup document instead. For Mantine, a small wrapper does it via theme
-  default props — see `SameWindowPortals` in the
-  [docs examples](docs/src/examples/SameWindowPortals.tsx): it reads its own
-  `ownerDocument` through a ref and provides that document's body as the
-  default `Portal` target, so it behaves correctly in either window.
+While the popup is open, the following are mirrored from the opener
+document and kept current:
 
-## Repository
+- `<style>` and `<link rel="stylesheet">` elements. `<style>` contents are
+  serialized from the CSSOM, so rules injected with `insertRule` are
+  included.
+- Additions, removals, and text edits of style nodes in `<head>`. This
+  covers Vite HMR, lazily loaded chunk CSS, and CSS-in-JS libraries.
+- `class`, `style`, and `data-*` attributes on `<html>` and `<body>`.
+  Theme systems keyed on root attributes propagate to the popup.
+- `document.adoptedStyleSheets`.
 
-- `src/` — the library (built with Vite library mode; ESM + CJS + types)
-- `docs/` — the docs/examples app ([deployed to GitHub Pages](https://jielga.github.io/react-popup-window/)); `npm run dev` serves it with the library aliased to source for HMR. Examples: a detachable [@jielga/tmdatagrid](https://github.com/Jielga/TMDataGrid) data grid fed by TanStack Query, a [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) layout whose results grid (400 virtualized rows, column filters, selection) pops out and collapses to a control strip, a shared-state counter, and live theme syncing (both the docs' own dark class and Mantine's color scheme attribute)
-- `e2e/` — Playwright tests that exercise real popup windows in Chromium
-- `src/**/*.test.*` — Vitest + jsdom unit tests
+Set `copyStyles: false` to disable.
+
+## Communication
+
+Popup content rendered through `Popup` is part of the calling component
+tree and executes in the opener's JavaScript realm. Props, state, and
+context are the communication mechanism; no message channel is required or
+provided.
+
+`postMessage` remains relevant only for scripts hosted in the popup
+document itself (for example, an injected non-React widget). Such scripts
+run in the popup's realm and can post to `window.opener`; the exposed
+`popupWindow` handle can be used from the opener side. Note that calling
+`opener.postMessage` from a portal event handler posts from the opener's
+own realm — the browser reports the main window, not the popup, as
+`event.source`.
+
+## Portal-based UI libraries
+
+Component libraries typically mount overlays — menus, popovers, modals,
+tooltips — into `document.body`, which is the main window's body even for
+components rendered inside the popup. Provide a portal target inside the
+popup document instead:
+
+- Mantine: portal defaults can be set through the theme. See
+  [`SameWindowPortals`](docs/src/examples/SameWindowPortals.tsx) for a
+  wrapper that resolves its own `ownerDocument` and supplies that
+  document's body as the default `Portal` target.
+- Radix, MUI, and similar: use the per-component portal `container` prop
+  with `popupWindow.document.body`.
+
+## Limitations
+
+- Browsers do not allow hiding the address bar entirely. `popup: true`
+  (the default) requests the minimal window chrome the platform provides.
+- `open()` must be called from a user gesture; otherwise the browser's
+  popup blocker intervenes and `open()` returns `null`.
+- Popup content unmounts and remounts when it moves between windows. State
+  that should survive detaching belongs in the component that owns the
+  hook, or in an external store.
+- The popup closes when the owning component unmounts and when the opener
+  window unloads. The popup document cannot outlive the opener.
+
+## Agent skills
+
+The package ships [Agent Skills](https://agentskills.io) for AI coding
+agents, managed with [`@tanstack/intent`](https://www.npmjs.com/package/@tanstack/intent):
+
+```sh
+npx @tanstack/intent@latest list
+npx @tanstack/intent@latest load @jielga/react-popup-window#getting-started
+```
+
+| Skill             | Contents                                                             |
+| ----------------- | -------------------------------------------------------------------- |
+| `getting-started` | Hook API, options, lifecycle, common mistakes                        |
+| `popup-content`   | Style synchronization, bounded-height layouts, portal-based overlays |
+
+## Development
+
+| Path        | Contents                                                        |
+| ----------- | --------------------------------------------------------------- |
+| `src/`      | Library source. Vite library mode; ESM, CJS, and declarations.  |
+| `docs/`     | Documentation site with live examples, deployed to GitHub Pages. |
+| `e2e/`      | Playwright tests that exercise real popup windows in Chromium.  |
+| `skills/`   | Agent skills shipped with the package.                          |
 
 ```sh
 npm install
-npm run dev        # docs app with live examples
-npm test           # unit tests (vitest + jsdom)
-npm run e2e        # Playwright end-to-end tests
-npm run build      # build the library into dist/
+npm run dev             # documentation site with the library aliased to source
+npm test                # unit tests (Vitest, jsdom)
+npm run e2e             # end-to-end tests (Playwright)
+npm run build           # build the library into dist/
+npm run skills:validate # validate agent skills
 ```
 
 ## License
 
-MIT © jielga
+[MIT](./LICENSE)
