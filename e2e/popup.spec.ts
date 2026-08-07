@@ -73,16 +73,6 @@ test('closing the popup window itself restores the main window table', async ({ 
   await expect(page.getByTestId('table-detached-note')).toHaveCount(0)
 })
 
-test('messaging works in both directions', async ({ page }) => {
-  const popup = await openPopup(page, 'open-messaging')
-
-  await page.getByTestId('send-to-popup').click()
-  await expect(popup.getByTestId('popup-log')).toContainText('hello from main')
-
-  await popup.getByTestId('send-to-main').click()
-  await expect(page.getByTestId('main-log')).toContainText('hi from the popup')
-})
-
 test('dark mode toggled in the main window propagates to the popup', async ({ page }) => {
   const popup = await openPopup(page, 'open-counter')
 

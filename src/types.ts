@@ -33,8 +33,6 @@ export interface UsePopupWindowOptions {
    * `<html>`/`<body>`, adopted stylesheets). Defaults to `true`.
    */
   copyStyles?: boolean
-  /** `targetOrigin` used by `sendMessage`. Defaults to `'*'`. */
-  targetOrigin?: string
   /** Called after the popup window has been opened and prepared. */
   onOpen?: (popupWindow: Window) => void
   /** Called when the popup closes — via `close()`, the user, or the opener unloading. */
@@ -42,9 +40,6 @@ export interface UsePopupWindowOptions {
   /** Called when `window.open` returns `null` (popup blocked by the browser). */
   onBlocked?: () => void
 }
-
-/** Handler for messages posted from the popup window to the opener. */
-export type PopupMessageHandler<T = unknown> = (data: T, event: MessageEvent) => void
 
 export interface PopupProps {
   children?: ReactNode
@@ -67,19 +62,15 @@ export interface PopupWindowApi {
   isOpen: boolean
   /** Whether the last `open()` attempt was blocked by the browser. */
   isBlocked: boolean
-  /** The popup `Window` while open, otherwise `null`. */
+  /**
+   * The popup `Window` while open, otherwise `null`. Escape hatch for
+   * anything window-level — sizing, focus tricks, or `postMessage` when the
+   * popup hosts non-React scripts of its own.
+   */
   popupWindow: Window | null
   /**
    * Portal component with a stable identity. Renders its children into the
    * popup's document while the popup is open, and nothing otherwise.
    */
   Popup: FC<PopupProps>
-  /** `postMessage` to the popup window. Returns `false` when it is not open. */
-  sendMessage: (data: unknown) => boolean
-  /**
-   * Subscribe to messages posted from the popup window to the opener
-   * (`window.opener.postMessage(...)`). Returns an unsubscribe function —
-   * call it inside `useEffect` and return the unsubscriber.
-   */
-  onMessage: <T = unknown>(handler: PopupMessageHandler<T>) => () => void
 }

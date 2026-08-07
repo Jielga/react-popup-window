@@ -27,7 +27,6 @@ function createFakePopup(): FakePopup {
       closed = true
     },
     focus: vi.fn(),
-    postMessage: vi.fn(),
     addEventListener(type: string, listener: EventListener) {
       if (!listeners.has(type)) listeners.set(type, new Set())
       listeners.get(type)!.add(listener)
@@ -155,42 +154,6 @@ describe('usePopupWindow', () => {
     expect(getApi().isBlocked).toBe(true)
     expect(getApi().isOpen).toBe(false)
     expect(onBlocked).toHaveBeenCalledTimes(1)
-  })
-
-  it('sendMessage posts to the popup window', () => {
-    const getApi = renderHarness({ targetOrigin: 'https://example.test' })
-    expect(getApi().sendMessage({ ping: 1 })).toBe(false)
-    act(() => {
-      getApi().open()
-    })
-    expect(getApi().sendMessage({ ping: 1 })).toBe(true)
-    expect(fake.win.postMessage).toHaveBeenCalledWith({ ping: 1 }, 'https://example.test')
-  })
-
-  it('onMessage receives messages whose source is the popup window', () => {
-    const getApi = renderHarness()
-    const handler = vi.fn()
-    act(() => {
-      getApi().open()
-    })
-    const unsubscribe = getApi().onMessage(handler)
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', { data: { pong: 2 }, source: fake.win as WindowProxy }),
-      )
-      window.dispatchEvent(new MessageEvent('message', { data: 'other', source: null }))
-    })
-    expect(handler).toHaveBeenCalledTimes(1)
-    expect(handler).toHaveBeenCalledWith({ pong: 2 }, expect.any(MessageEvent))
-
-    unsubscribe()
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', { data: { pong: 3 }, source: fake.win as WindowProxy }),
-      )
-    })
-    expect(handler).toHaveBeenCalledTimes(1)
   })
 
   it('closes the popup when the owning component unmounts', () => {

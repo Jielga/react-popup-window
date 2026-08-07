@@ -3,7 +3,6 @@ import type { FC } from 'react'
 import { createPortal } from 'react-dom'
 import { copyStyles } from './copyStyles'
 import type {
-  PopupMessageHandler,
   PopupProps,
   PopupWindowApi,
   PopupWindowFeatures,
@@ -97,7 +96,6 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
   const optionsRef = useRef(options)
   optionsRef.current = options
 
-  const messageHandlersRef = useRef(new Set<PopupMessageHandler<never>>())
   const cleanupRef = useRef<(() => void) | null>(null)
 
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot)
@@ -163,18 +161,9 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
     const onOpenerPagehide = () => popupWindow.close()
     window.addEventListener('pagehide', onOpenerPagehide)
 
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== popupWindow) return
-      for (const handler of messageHandlersRef.current) {
-        ;(handler as PopupMessageHandler)(event.data, event)
-      }
-    }
-    window.addEventListener('message', onMessage)
-
     cleanupRef.current = () => {
       window.clearInterval(closePoll)
       window.removeEventListener('pagehide', onOpenerPagehide)
-      window.removeEventListener('message', onMessage)
       popupWindow.removeEventListener('pagehide', onPopupPagehide)
       stopStyleSync?.()
     }
@@ -199,22 +188,6 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
     if (popupWindow && !popupWindow.closed) popupWindow.focus()
   }, [store])
 
-  const sendMessage = useCallback(
-    (data: unknown): boolean => {
-      const { popupWindow } = store.getSnapshot()
-      if (!popupWindow || popupWindow.closed) return false
-      popupWindow.postMessage(data, optionsRef.current.targetOrigin ?? '*')
-      return true
-    },
-    [store],
-  )
-
-  const onMessage = useCallback(<T,>(handler: PopupMessageHandler<T>): (() => void) => {
-    const handlers = messageHandlersRef.current
-    handlers.add(handler as PopupMessageHandler<never>)
-    return () => handlers.delete(handler as PopupMessageHandler<never>)
-  }, [])
-
   // Close the popup when the owning component unmounts — its portal content
   // would unmount anyway, leaving an empty window behind.
   useEffect(() => {
@@ -230,7 +203,5 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
     isBlocked: state.blocked,
     popupWindow: state.popupWindow,
     Popup,
-    sendMessage,
-    onMessage,
   }
 }

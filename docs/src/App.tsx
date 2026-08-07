@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { CounterExample } from './examples/CounterExample'
 import { DataTableExample } from './examples/DataTableExample'
-import { MessagingExample } from './examples/MessagingExample'
 
 const queryClient = new QueryClient()
 
@@ -41,16 +40,6 @@ return (
     <Popup>{table}</Popup>
   </>
 )`
-
-const MESSAGING_SNIPPET = `const { sendMessage, onMessage, popupWindow } = usePopupWindow()
-
-// main ← popup
-useEffect(() => onMessage((data) => console.log(data)), [onMessage])
-
-// main → popup
-sendMessage({ hello: 'popup' })
-
-// inside popup-hosted code: window.opener.postMessage(data, origin)`
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false)
@@ -132,17 +121,14 @@ export function App() {
           </div>
 
           <div className="card">
-            <h3>Messaging</h3>
+            <h3>No messaging needed</h3>
             <p>
-              For popup-hosted non-React code (or just explicit channels), both windows can talk
-              over <code>postMessage</code>.
+              There is no message channel in this library — on purpose. Popup content stays in your
+              component tree and your JS realm, so props, state and context <em>are</em> the
+              communication. If you ever host non-React scripts inside the popup document itself,
+              the raw <code>popupWindow</code> handle is the escape hatch for{' '}
+              <code>postMessage</code>.
             </p>
-            <div className="demo">
-              <MessagingExample />
-            </div>
-            <pre>
-              <code>{MESSAGING_SNIPPET}</code>
-            </pre>
           </div>
         </section>
 
@@ -192,31 +178,13 @@ export function App() {
                   while open.
                 </td>
               </tr>
-              <tr>
-                <td>
-                  <code>sendMessage(data)</code>
-                </td>
-                <td>
-                  <code>postMessage</code> to the popup window (<code>targetOrigin</code> option,
-                  default <code>'*'</code>).
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <code>onMessage(handler)</code>
-                </td>
-                <td>
-                  Subscribe to messages posted from the popup to the opener. Returns an unsubscribe
-                  function.
-                </td>
-              </tr>
             </tbody>
           </table>
           <p style={{ marginTop: '0.9rem' }}>
             Options: <code>title</code>, <code>name</code>, <code>features</code> (width/height/…,
             default <code>{'{ popup: true, width: 640, height: 480 }'}</code>), <code>center</code>,{' '}
-            <code>copyStyles</code>, <code>targetOrigin</code>, <code>onOpen</code>,{' '}
-            <code>onClose</code>, <code>onBlocked</code>. Full reference in the{' '}
+            <code>copyStyles</code>, <code>onOpen</code>, <code>onClose</code>,{' '}
+            <code>onBlocked</code>. Full reference in the{' '}
             <a href="https://github.com/jielga/react-popup-window#api">README</a>.
           </p>
         </section>

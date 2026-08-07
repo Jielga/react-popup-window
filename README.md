@@ -95,7 +95,6 @@ interface UsePopupWindowOptions {
   features?: PopupWindowFeatures // default: { popup: true, width: 640, height: 480 }
   center?: boolean // center over the opener window (default: true)
   copyStyles?: boolean // mirror + live-sync stylesheets (default: true)
-  targetOrigin?: string // used by sendMessage (default: '*')
   onOpen?: (popupWindow: Window) => void
   onClose?: () => void // close(), user close, or opener unload
   onBlocked?: () => void // window.open returned null
@@ -114,12 +113,21 @@ Returns:
 | `isOpen`                              | Reactive boolean.                                                                                                                             |
 | `isBlocked`                           | `true` when the last `open()` was blocked by the browser.                                                                                     |
 | `popupWindow`                         | The raw `Window` while open, else `null`.                                                                                                     |
-| `sendMessage(data)`                   | `postMessage` to the popup window. Returns `false` when not open.                                                                             |
-| `onMessage(handler)`                  | Subscribe to messages the popup posts to the opener (`window.opener.postMessage(...)`). Returns an unsubscribe function — pair with `useEffect`. |
 
-With portal rendering you rarely need messaging — shared state covers most
-cases. `sendMessage`/`onMessage` exist for popup-hosted non-React code or when
-you want an explicit channel.
+### Communicating with popup content
+
+You don't. There is nothing to communicate *across* — popup content stays in
+your component tree and your JS realm, so props, state and context (TanStack
+Query, Redux, …) already cover it, exactly like any other component.
+
+The one exception is scripts that live in the popup's own document (e.g. a
+non-React widget you inject into `popupWindow.document`). Those run in the
+popup's realm and can talk to your app via standard `postMessage` — the raw
+`popupWindow` handle is the escape hatch for that. Note that calling
+`opener.postMessage` from a portal event handler won't look like a popup
+message: portal handlers run in the main window's realm, so the browser stamps
+the main window as `event.source`. Only code hosted in the popup document
+posts *as* the popup.
 
 ### Style syncing
 
