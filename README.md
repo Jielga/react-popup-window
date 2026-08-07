@@ -166,7 +166,7 @@ returns a `stop()` function.
 ## Repository
 
 - `src/` — the library (built with Vite library mode; ESM + CJS + types)
-- `docs/` — the docs/examples app ([deployed to GitHub Pages](https://jielga.github.io/react-popup-window/)); `npm run dev` serves it with the library aliased to source for HMR
+- `docs/` — the docs/examples app ([deployed to GitHub Pages](https://jielga.github.io/react-popup-window/)); `npm run dev` serves it with the library aliased to source for HMR. Examples: a detachable TanStack Query data table, a [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) layout whose results panel pops out and collapses to a control strip, a shared-state counter, and live theme syncing
 - `e2e/` — Playwright tests that exercise real popup windows in Chromium
 - `src/**/*.test.*` — Vitest + jsdom unit tests
 

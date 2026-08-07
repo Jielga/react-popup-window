@@ -73,6 +73,35 @@ test('closing the popup window itself restores the main window table', async ({ 
   await expect(page.getByTestId('table-detached-note')).toHaveCount(0)
 })
 
+test('panels: popped-out results follow filters edited in the main window', async ({ page }) => {
+  // Inline to start: the results table renders in the right panel.
+  await expect(page.getByTestId('results-table')).toBeVisible()
+  await expect(page.getByTestId('results-count')).toHaveText('12 of 12 people')
+
+  const popup = await openPopup(page, 'open-results')
+
+  // The right panel collapses to the control strip; the table now lives in the popup.
+  await expect(page.getByTestId('panel-strip')).toBeVisible()
+  await expect(page.getByTestId('results-table')).toHaveCount(0)
+  await expect(popup.getByTestId('results-table')).toBeVisible()
+  await expect(popup.getByTestId('results-table').locator('tbody tr')).toHaveCount(12)
+
+  // Filter from the MAIN window — the popped-out table updates live.
+  await page.getByTestId('filter-search').fill('lund')
+  await expect(popup.getByTestId('results-count')).toHaveText('2 of 12 people') // Vera Holm (Lund) + Oscar Lundgren
+  await page.getByTestId('filter-search').fill('')
+  await page.getByTestId('filter-role').selectOption('Engineer')
+  await page.getByTestId('filter-active').check()
+  await expect(popup.getByTestId('results-count')).toHaveText('5 of 12 people')
+
+  // Bring it back via the strip: popup closes, panel expands with the table inline.
+  await page.getByTestId('panel-bring-back').click()
+  await expect.poll(() => popup.isClosed()).toBe(true)
+  await expect(page.getByTestId('panel-strip')).toHaveCount(0)
+  await expect(page.getByTestId('results-table')).toBeVisible()
+  await expect(page.getByTestId('results-count')).toHaveText('5 of 12 people')
+})
+
 test('dark mode toggled in the main window propagates to the popup', async ({ page }) => {
   const popup = await openPopup(page, 'open-counter')
 

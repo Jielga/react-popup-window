@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { CounterExample } from './examples/CounterExample'
 import { DataTableExample } from './examples/DataTableExample'
+import { PanelsExample } from './examples/PanelsExample'
 
 const queryClient = new QueryClient()
 
@@ -40,6 +41,26 @@ return (
     <Popup>{table}</Popup>
   </>
 )`
+
+const PANELS_SNIPPET = `const resultsPanelRef = usePanelRef() // react-resizable-panels
+const { open, close, focus, isOpen, Popup } = usePopupWindow({ title: 'Search results' })
+
+// Collapse the results panel to a control strip while popped out;
+// expand again when the popup closes (button or the user closing it).
+useEffect(() => {
+  if (isOpen) resultsPanelRef.current?.collapse()
+  else resultsPanelRef.current?.expand()
+}, [isOpen, resultsPanelRef])
+
+const results = <ResultsTable filters={filters} /> // filters state stays here
+
+<Panel panelRef={resultsPanelRef} collapsible collapsedSize="56px" minSize="30%">
+  {isOpen
+    ? <Strip onFocus={focus} onBringBack={close} />
+    : <><button onClick={open}>Open in new window ↗</button>{results}</>}
+</Panel>
+// …
+<Popup>{results}</Popup>`
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false)
@@ -106,6 +127,24 @@ export function App() {
             </div>
             <pre>
               <code>{TABLE_SNIPPET}</code>
+            </pre>
+          </div>
+
+          <div className="card">
+            <h3>Resizable panels with a pop-out results panel</h3>
+            <p>
+              Built with{' '}
+              <a href="https://github.com/bvaughn/react-resizable-panels">react-resizable-panels</a>
+              : the left panel holds the query form, the right panel the results. Popping the
+              results out collapses the panel to a control strip (focus / bring back) — and because
+              the filter state lives in the main window, editing filters updates the popped-out
+              table live.
+            </p>
+            <div className="demo">
+              <PanelsExample />
+            </div>
+            <pre>
+              <code>{PANELS_SNIPPET}</code>
             </pre>
           </div>
 

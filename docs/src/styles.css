@@ -228,6 +228,102 @@ html.dark .status-pill.active {
   padding: 1rem;
 }
 
+/* Resizable panels example */
+.panels-group {
+  height: 380px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 0.9rem;
+}
+
+.panel-side {
+  overflow: auto;
+  background: var(--surface);
+}
+
+.panel-separator {
+  width: 6px;
+  background: var(--border);
+  cursor: col-resize;
+  flex-shrink: 0;
+}
+
+.panel-separator:hover,
+.panel-separator[data-resize='active'] {
+  background: var(--accent);
+}
+
+.panel-filters {
+  padding: 1rem;
+}
+
+.filters-form h4,
+.panel-results-header h4 {
+  margin: 0 0 0.5rem;
+}
+
+.filters-form label {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.filters-form input[type='text'],
+.filters-form select {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+  font: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+}
+
+.filters-form .filters-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text);
+}
+
+.panel-results-inner {
+  padding: 1rem;
+}
+
+.panel-results-header {
+  justify-content: space-between;
+}
+
+.panel-strip {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+}
+
+.panel-strip button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+}
+
+.panel-strip-label {
+  writing-mode: vertical-rl;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-top: 0.5rem;
+  white-space: nowrap;
+}
+
 /* Content rendered inside the popup window. Global styles (including this
    file) are mirrored into the popup by the library, so it just works. */
 .popup-panel {
