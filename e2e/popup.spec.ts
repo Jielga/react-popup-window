@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { generatePeople } from '../docs/src/examples/people'
+
+const PEOPLE_12 = generatePeople(12)
+const PEOPLE_400 = generatePeople(400)
 
 test.beforeEach(async ({ page }) => {
   await page.goto('./')
@@ -34,72 +38,94 @@ test('counter: events and state work across windows', async ({ page }) => {
   await expect.poll(() => popup.isClosed()).toBe(true)
 })
 
-test('data table: detaches into popup, TanStack Query context works, main hides table', async ({
+test('data grid detaches into popup with TanStack Query and Mantine context intact', async ({
   page,
 }) => {
-  await expect(page.getByTestId('people-table')).toBeVisible()
+  const grid = page.getByTestId('people-grid')
+  await expect(grid).toBeVisible()
+  await expect(grid.getByText(PEOPLE_12[0].name)).toBeVisible()
 
   const popup = await openPopup(page, 'open-table')
 
-  // Main window hides the inline table and shows the note.
+  // Main window hides the grid and shows the note.
   await expect(page.getByTestId('table-detached-note')).toBeVisible()
-  await expect(page.getByTestId('people-table')).toHaveCount(0)
+  await expect(page.getByTestId('people-grid')).toHaveCount(0)
 
-  // The table renders in the popup with data from useQuery.
-  await expect(popup.getByTestId('people-table')).toBeVisible()
-  await expect(popup.getByTestId('people-table').locator('tbody tr')).toHaveCount(6)
-
-  // Sorting (interaction inside the popup).
-  await popup.locator('th', { hasText: 'Name' }).click() // toggle to descending
-  await expect(popup.locator('tbody tr').first()).toContainText('Vera Holm')
+  // The TMDataGrid renders in the popup with data from useQuery.
+  await expect(popup.getByTestId('people-grid')).toBeVisible()
+  await expect(popup.getByText(PEOPLE_12[0].name)).toBeVisible()
+  await expect(popup.getByText(PEOPLE_12[11].name)).toBeVisible()
 
   // Refetch goes through the QueryClientProvider mounted in the main window.
   await popup.getByRole('button', { name: /Refetch/ }).click()
   await expect(popup.getByRole('button', { name: /Refetch/ })).toBeEnabled()
 
-  // Bring it back: popup closes, inline table returns.
+  // Bring it back: popup closes, inline grid returns.
   await page.getByTestId('bring-back').click()
-  await expect(page.getByTestId('people-table')).toBeVisible()
+  await expect(page.getByTestId('people-grid')).toBeVisible()
   await expect.poll(() => popup.isClosed()).toBe(true)
 })
 
-test('closing the popup window itself restores the main window table', async ({ page }) => {
+test('closing the popup window itself restores the main window grid', async ({ page }) => {
   const popup = await openPopup(page, 'open-table')
   await expect(page.getByTestId('table-detached-note')).toBeVisible()
 
   await popup.close()
 
-  await expect(page.getByTestId('people-table')).toBeVisible()
+  await expect(page.getByTestId('people-grid')).toBeVisible()
   await expect(page.getByTestId('table-detached-note')).toHaveCount(0)
 })
 
-test('panels: popped-out results follow filters edited in the main window', async ({ page }) => {
-  // Inline to start: the results table renders in the right panel.
-  await expect(page.getByTestId('results-table')).toBeVisible()
-  await expect(page.getByTestId('results-count')).toHaveText('12 of 12 people')
+test('panels: popped-out grid follows filters edited in the main window', async ({ page }) => {
+  // Inline to start: the results grid renders in the right panel.
+  const host = page.getByTestId('results-host')
+  await expect(host).toBeVisible()
+  await expect(host.getByText('400 / 400')).toBeVisible()
+  await expect(host.getByText(PEOPLE_400[0].name)).toBeVisible()
 
   const popup = await openPopup(page, 'open-results')
 
-  // The right panel collapses to the control strip; the table now lives in the popup.
+  // The right panel collapses to the control strip; the grid now lives in the popup.
   await expect(page.getByTestId('panel-strip')).toBeVisible()
-  await expect(page.getByTestId('results-table')).toHaveCount(0)
-  await expect(popup.getByTestId('results-table')).toBeVisible()
-  await expect(popup.getByTestId('results-table').locator('tbody tr')).toHaveCount(12)
+  await expect(page.getByTestId('results-host')).toHaveCount(0)
+  await expect(popup.getByText('400 / 400')).toBeVisible()
+  await expect(popup.getByText(PEOPLE_400[0].name)).toBeVisible()
 
-  // Filter from the MAIN window — the popped-out table updates live.
-  await page.getByTestId('filter-search').fill('lund')
-  await expect(popup.getByTestId('results-count')).toHaveText('2 of 12 people') // Vera Holm (Lund) + Oscar Lundgren
+  // Filter from the MAIN window — the popped-out grid updates live.
+  const needle = 'lindqvist'
+  const byName = PEOPLE_400.filter((p) => p.name.toLowerCase().includes(needle)).length
+  expect(byName).toBeGreaterThan(0)
+  await page.getByTestId('filter-search').fill(needle)
+  await expect(popup.getByText(`${byName} / ${byName}`)).toBeVisible()
+
   await page.getByTestId('filter-search').fill('')
+  const engineersActive = PEOPLE_400.filter(
+    (p) => p.role === 'Engineer' && p.status === 'active',
+  ).length
   await page.getByTestId('filter-role').selectOption('Engineer')
   await page.getByTestId('filter-active').check()
-  await expect(popup.getByTestId('results-count')).toHaveText('5 of 12 people')
+  await expect(popup.getByText(`${engineersActive} / ${engineersActive}`)).toBeVisible()
 
-  // Bring it back via the strip: popup closes, panel expands with the table inline.
+  // Bring it back via the strip: popup closes, panel expands with the grid inline.
   await page.getByTestId('panel-bring-back').click()
   await expect.poll(() => popup.isClosed()).toBe(true)
   await expect(page.getByTestId('panel-strip')).toHaveCount(0)
-  await expect(page.getByTestId('results-table')).toBeVisible()
-  await expect(page.getByTestId('results-count')).toHaveText('5 of 12 people')
+  await expect(
+    page.getByTestId('results-host').getByText(`${engineersActive} / ${engineersActive}`),
+  ).toBeVisible()
+})
+
+test('mantine popovers opened from the popped-out grid stay in the popup window', async ({
+  page,
+}) => {
+  const popup = await openPopup(page, 'open-results')
+  await expect(popup.getByText(PEOPLE_400[0].name)).toBeVisible()
+
+  // The column manager popover portals — thanks to the SameWindowPortals
+  // wrapper it must land in the POPUP document, not the main window's body.
+  await popup.getByRole('button', { name: 'Manage columns' }).click()
+  await expect(popup.getByText('Show/Hide All')).toBeVisible()
+  await expect(page.getByText('Show/Hide All')).toHaveCount(0)
 })
 
 test('dark mode toggled in the main window propagates to the popup', async ({ page }) => {

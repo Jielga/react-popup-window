@@ -162,11 +162,19 @@ returns a `stop()` function.
   windows. Keep state you care about in the owning component (like the
   examples do) or in a store.
 - **SSR-safe:** the hook touches `window` only inside `open()`.
+- **UI libraries that portal to `document.body`** (Mantine, Radix, MUI, …):
+  their menus, popovers and tooltips mount into the *main* window's body, even
+  for components rendered in the popup. Give those portals a target inside the
+  popup document instead. For Mantine, a small wrapper does it via theme
+  default props — see `SameWindowPortals` in the
+  [docs examples](docs/src/examples/SameWindowPortals.tsx): it reads its own
+  `ownerDocument` through a ref and provides that document's body as the
+  default `Portal` target, so it behaves correctly in either window.
 
 ## Repository
 
 - `src/` — the library (built with Vite library mode; ESM + CJS + types)
-- `docs/` — the docs/examples app ([deployed to GitHub Pages](https://jielga.github.io/react-popup-window/)); `npm run dev` serves it with the library aliased to source for HMR. Examples: a detachable TanStack Query data table, a [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) layout whose results panel pops out and collapses to a control strip, a shared-state counter, and live theme syncing
+- `docs/` — the docs/examples app ([deployed to GitHub Pages](https://jielga.github.io/react-popup-window/)); `npm run dev` serves it with the library aliased to source for HMR. Examples: a detachable [@jielga/tmdatagrid](https://github.com/Jielga/TMDataGrid) data grid fed by TanStack Query, a [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) layout whose results grid (400 virtualized rows, column filters, selection) pops out and collapses to a control strip, a shared-state counter, and live theme syncing (both the docs' own dark class and Mantine's color scheme attribute)
 - `e2e/` — Playwright tests that exercise real popup windows in Chromium
 - `src/**/*.test.*` — Vitest + jsdom unit tests
 

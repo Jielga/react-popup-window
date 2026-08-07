@@ -1,3 +1,4 @@
+import { MantineProvider, useMantineColorScheme } from '@mantine/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { CounterExample } from './examples/CounterExample'
@@ -27,20 +28,42 @@ function Dashboard() {
 }`
 
 const TABLE_SNIPPET = `const { open, close, focus, isOpen, Popup } = usePopupWindow({
-  title: 'People — detached table',
+  title: 'People — detached grid',
   features: { width: 720, height: 480 },
 })
 
-const table = <DataTable /> // uses useQuery() internally
+const peopleGrid = <PeopleGrid /> // TMDataGrid + useQuery() inside
 
 return (
   <>
     {isOpen
       ? <DetachedNote onFocus={focus} onBringBack={close} />
-      : <><button onClick={open}>Open table in new window</button>{table}</>}
-    <Popup>{table}</Popup>
+      : <><button onClick={open}>Open grid in new window</button>{peopleGrid}</>}
+    <Popup>{peopleGrid}</Popup>
   </>
 )`
+
+const PORTAL_TARGET_SNIPPET = `// Mantine portals (menus, popovers, tooltips) mount into the MAIN window's
+// document.body — wrong window when the trigger lives in the popup. Portal
+// reads default props from the nearest Mantine theme, so: detect the
+// document we got mounted into and provide its body as the portal target.
+export function SameWindowPortals({ children }) {
+  const probeRef = useRef(null)
+  const [target, setTarget] = useState(null)
+  useEffect(() => setTarget(probeRef.current?.ownerDocument.body ?? null), [])
+
+  const theme = useMemo(() => ({
+    components: {
+      Portal: Portal.extend({ defaultProps: target ? { target, reuseTargetNode: false } : {} }),
+    },
+  }), [target])
+
+  return (
+    <div ref={probeRef} style={{ display: 'contents' }}>
+      <MantineThemeProvider inherit theme={theme}>{children}</MantineThemeProvider>
+    </div>
+  )
+}`
 
 const PANELS_SNIPPET = `const resultsPanelRef = usePanelRef() // react-resizable-panels
 const { open, close, focus, isOpen, Popup } = usePopupWindow({ title: 'Search results' })
@@ -52,7 +75,7 @@ useEffect(() => {
   else resultsPanelRef.current?.expand()
 }, [isOpen, resultsPanelRef])
 
-const results = <ResultsTable filters={filters} /> // filters state stays here
+const results = <ResultsGrid filters={filters} /> // filters state stays here
 
 <Panel panelRef={resultsPanelRef} collapsible collapsedSize="56px" minSize="30%">
   {isOpen
@@ -64,9 +87,15 @@ const results = <ResultsTable filters={filters} /> // filters state stays here
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false)
+  const { setColorScheme } = useMantineColorScheme()
   useEffect(() => {
+    // Our docs CSS keys off html.dark; Mantine keys off its
+    // data-mantine-color-scheme attribute. Both are root attributes, so the
+    // popup follows automatically — the library keeps class and data-*
+    // attributes on <html>/<body> in sync.
     document.documentElement.classList.toggle('dark', dark)
-  }, [dark])
+    setColorScheme(dark ? 'dark' : 'light')
+  }, [dark, setColorScheme])
   return (
     <button className="secondary theme-toggle" onClick={() => setDark((d) => !d)}>
       {dark ? 'Light mode' : 'Dark mode'}
@@ -75,6 +104,14 @@ function ThemeToggle() {
 }
 
 export function App() {
+  return (
+    <MantineProvider defaultColorScheme="light">
+      <AppInner />
+    </MantineProvider>
+  )
+}
+
+function AppInner() {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="container">
@@ -115,12 +152,13 @@ export function App() {
           </p>
 
           <div className="card">
-            <h3>Detached data table (TanStack Query)</h3>
+            <h3>Detached data grid (TMDataGrid + TanStack Query)</h3>
             <p>
-              The table gets its data from <code>useQuery</code>. The{' '}
-              <code>QueryClientProvider</code> is mounted once, in this window's tree — the popup
-              content reaches it through normal React context, because the portal keeps the content
-              in the same tree. While detached, the main window hides the table.
+              A <a href="https://github.com/Jielga/TMDataGrid">@jielga/tmdatagrid</a> grid getting
+              its data from <code>useQuery</code>. Both the <code>QueryClientProvider</code> and the{' '}
+              <code>MantineProvider</code> the grid requires are mounted once, in this window's tree
+              — the popup content reaches them through normal React context, because the portal
+              keeps the content in the same tree. While detached, the main window hides the grid.
             </p>
             <div className="demo">
               <DataTableExample />
@@ -131,20 +169,36 @@ export function App() {
           </div>
 
           <div className="card">
-            <h3>Resizable panels with a pop-out results panel</h3>
+            <h3>Resizable panels with a pop-out results grid</h3>
             <p>
               Built with{' '}
-              <a href="https://github.com/bvaughn/react-resizable-panels">react-resizable-panels</a>
-              : the left panel holds the query form, the right panel the results. Popping the
-              results out collapses the panel to a control strip (focus / bring back) — and because
-              the filter state lives in the main window, editing filters updates the popped-out
-              table live.
+              <a href="https://github.com/bvaughn/react-resizable-panels">react-resizable-panels</a>{' '}
+              and <a href="https://github.com/Jielga/TMDataGrid">@jielga/tmdatagrid</a>: the left
+              panel holds the query form, the right panel a grid with 400 virtualized rows —
+              sortable, resizable, reorderable and pinnable columns, column filters, row selection,
+              and a drag-selectable cell range with Ctrl+C. Popping the results out collapses the
+              panel to a control strip (focus / bring back) — and because the filter state lives in
+              the main window, editing filters updates the popped-out grid live.
             </p>
             <div className="demo">
               <PanelsExample />
             </div>
             <pre>
               <code>{PANELS_SNIPPET}</code>
+            </pre>
+          </div>
+
+          <div className="card">
+            <h3>UI libraries that portal to document.body</h3>
+            <p>
+              Component libraries render menus, popovers and tooltips through portals into{' '}
+              <code>document.body</code> — which is the <em>main</em> window's body, even for
+              components inside the popup. Mantine reads portal defaults from its theme, so a small
+              wrapper redirects portals to whichever document the content is rendered in. The grids
+              above use it — open a column menu in a popped-out grid and it stays in the popup.
+            </p>
+            <pre>
+              <code>{PORTAL_TARGET_SNIPPET}</code>
             </pre>
           </div>
 

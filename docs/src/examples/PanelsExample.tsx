@@ -1,37 +1,41 @@
+import { Badge } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
+import {
+  createTMDataGridColumnHelper,
+  TMDataGrid,
+  useTMDataGrid,
+} from '@jielga/tmdatagrid'
 import { useEffect, useMemo, useState } from 'react'
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels'
 import { usePopupWindow } from '@jielga/react-popup-window'
+import { fetchPeople, ROLES } from './people'
+import type { Person } from './people'
+import { SameWindowPortals } from './SameWindowPortals'
 
-interface Row {
-  id: number
-  name: string
-  role: string
-  city: string
-  status: 'active' | 'away'
-}
+const columnHelper = createTMDataGridColumnHelper<Person>()
 
-const DIRECTORY: Row[] = [
-  { id: 1, name: 'Alva Lindqvist', role: 'Engineer', city: 'Stockholm', status: 'active' },
-  { id: 2, name: 'Noah Berg', role: 'Designer', city: 'Göteborg', status: 'away' },
-  { id: 3, name: 'Maja Ekström', role: 'Product', city: 'Malmö', status: 'active' },
-  { id: 4, name: 'Elias Sandberg', role: 'Engineer', city: 'Uppsala', status: 'active' },
-  { id: 5, name: 'Vera Holm', role: 'Data', city: 'Lund', status: 'away' },
-  { id: 6, name: 'Hugo Nilsson', role: 'Engineer', city: 'Umeå', status: 'active' },
-  { id: 7, name: 'Stella Åberg', role: 'Designer', city: 'Örebro', status: 'active' },
-  { id: 8, name: 'Liam Forsberg', role: 'Product', city: 'Linköping', status: 'away' },
-  { id: 9, name: 'Ines Dahl', role: 'Data', city: 'Västerås', status: 'active' },
-  { id: 10, name: 'Oscar Lundgren', role: 'Engineer', city: 'Helsingborg', status: 'active' },
-  { id: 11, name: 'Selma Wikström', role: 'Designer', city: 'Norrköping', status: 'away' },
-  { id: 12, name: 'Adam Sjöberg', role: 'Engineer', city: 'Jönköping', status: 'active' },
-]
+const columns = columnHelper.columns([
+  columnHelper.accessor('name', { header: 'Name', minSize: 150, meta: { flex: 1.3 } }),
+  columnHelper.accessor('role', { header: 'Role', minSize: 100 }),
+  columnHelper.accessor('city', { header: 'City', minSize: 110 }),
+  columnHelper.accessor('salary', {
+    header: 'Salary',
+    minSize: 110,
+    meta: { type: 'number', align: 'right' },
+    cell: (info) => `${info.getValue().toLocaleString('sv-SE')} kr`,
+  }),
+  columnHelper.accessor('status', {
+    header: 'Status',
+    minSize: 100,
+    cell: (info) => (
+      <Badge variant="light" size="sm" color={info.getValue() === 'active' ? 'green' : 'gray'}>
+        {info.getValue()}
+      </Badge>
+    ),
+  }),
+])
 
-const ROLES = ['Engineer', 'Designer', 'Product', 'Data']
-
-async function fetchDirectory(): Promise<Row[]> {
-  await new Promise((resolve) => setTimeout(resolve, 400))
-  return DIRECTORY
-}
+const EMPTY: Person[] = []
 
 interface Filters {
   search: string
@@ -83,16 +87,20 @@ function FiltersForm({
         />
         Only active
       </label>
+      <p className="muted" style={{ fontSize: '0.78rem' }}>
+        These filters run in the main window and pre-filter the grid's data — the grid's own column
+        filters, sorting, selection and column manager come on top.
+      </p>
     </form>
   )
 }
 
-function ResultsTable({ filters }: { filters: Filters }) {
-  const { data, isLoading } = useQuery({ queryKey: ['directory'], queryFn: fetchDirectory })
+function ResultsGrid({ filters }: { filters: Filters }) {
+  const { data } = useQuery({ queryKey: ['people', 400], queryFn: () => fetchPeople(400) })
 
   const rows = useMemo(() => {
     const needle = filters.search.trim().toLowerCase()
-    return (data ?? []).filter(
+    return (data ?? EMPTY).filter(
       (row) =>
         (!needle ||
           row.name.toLowerCase().includes(needle) ||
@@ -102,36 +110,30 @@ function ResultsTable({ filters }: { filters: Filters }) {
     )
   }, [data, filters])
 
-  if (isLoading) return <p className="muted">Loading…</p>
+  // Virtualized (always), sortable, resizable, reorderable and pinnable
+  // columns, column filters, checkbox row selection, and a drag-selectable
+  // cell range with Ctrl+C / CSV export.
+  const grid = useTMDataGrid({
+    data: rows,
+    columns,
+    getRowId: (row) => String(row.id),
+    cellSelection: 'range',
+    meta: { loading: !data },
+  })
 
   return (
-    <div>
-      <p className="muted" data-testid="results-count">
-        {rows.length} of {data?.length ?? 0} people
-      </p>
-      <table className="data-table" data-testid="results-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Role</th>
-            <th>City</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <td>{row.name}</td>
-              <td>{row.role}</td>
-              <td>{row.city}</td>
-              <td>
-                <span className={`status-pill ${row.status}`}>{row.status}</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <SameWindowPortals>
+      <TMDataGrid {...grid} size="sm" style={{ flex: 1, minHeight: 0 }}>
+        <TMDataGrid.Toolbar>
+          <TMDataGrid.SummaryCount />
+          <TMDataGrid.Spacer />
+          <TMDataGrid.FilterButton />
+          <TMDataGrid.ColumnsButton />
+        </TMDataGrid.Toolbar>
+        <TMDataGrid.FilterPanel />
+        <TMDataGrid.Table<Person> />
+      </TMDataGrid>
+    </SameWindowPortals>
   )
 }
 
@@ -141,7 +143,7 @@ export function PanelsExample() {
 
   const { open, close, focus, isOpen, Popup } = usePopupWindow({
     title: 'Search results',
-    features: { width: 760, height: 540 },
+    features: { width: 860, height: 560 },
   })
 
   // Collapse the results panel to a narrow control strip while its content
@@ -154,62 +156,58 @@ export function PanelsExample() {
     else panel.expand()
   }, [isOpen, resultsPanelRef])
 
-  // One element, three possible homes: inline in the right panel, or in the
+  // One element, two possible homes: inline in the right panel, or in the
   // popup. The filter state lives here in the main window either way.
-  const results = <ResultsTable filters={filters} />
+  const results = <ResultsGrid filters={filters} />
 
   return (
     <div>
-      <Group orientation="horizontal" className="panels-group">
-        <Panel defaultSize="34%" minSize="220px" className="panel-side panel-filters">
-          <FiltersForm filters={filters} onChange={setFilters} />
-        </Panel>
-        <Separator className="panel-separator" />
-        <Panel
-          panelRef={resultsPanelRef}
-          collapsible
-          collapsedSize="56px"
-          minSize="30%"
-          className="panel-side panel-results"
-        >
-          {isOpen ? (
-            <div className="panel-strip" data-testid="panel-strip">
-              <button title="Focus the window" aria-label="Focus the window" onClick={focus}>
-                ⧉
-              </button>
-              <button
-                className="secondary"
-                title="Bring the results back"
-                aria-label="Bring the results back"
-                onClick={close}
-                data-testid="panel-bring-back"
-              >
-                ✕
-              </button>
-              <span className="panel-strip-label">Results in separate window</span>
-            </div>
-          ) : (
-            <div className="panel-results-inner">
-              <div className="row panel-results-header">
-                <h4>Results</h4>
-                <button className="secondary" onClick={open} data-testid="open-results">
-                  Open in new window ↗
+      {/* The Group sizes itself to 100% of its parent — give it a frame. */}
+      <div className="panels-frame">
+        <Group orientation="horizontal" className="panels-group">
+          <Panel defaultSize="30%" minSize="220px" className="panel-side panel-filters">
+            <FiltersForm filters={filters} onChange={setFilters} />
+          </Panel>
+          <Separator className="panel-separator" />
+          <Panel
+            panelRef={resultsPanelRef}
+            collapsible
+            collapsedSize="56px"
+            minSize="30%"
+            className="panel-side panel-results"
+          >
+            {isOpen ? (
+              <div className="panel-strip" data-testid="panel-strip">
+                <button title="Focus the window" aria-label="Focus the window" onClick={focus}>
+                  ⧉
                 </button>
+                <button
+                  className="secondary"
+                  title="Bring the results back"
+                  aria-label="Bring the results back"
+                  onClick={close}
+                  data-testid="panel-bring-back"
+                >
+                  ✕
+                </button>
+                <span className="panel-strip-label">Results in separate window</span>
               </div>
-              {results}
-            </div>
-          )}
-        </Panel>
-      </Group>
+            ) : (
+              <div className="panel-results-inner" data-testid="results-host">
+                <div className="row panel-results-header">
+                  <h4>Results</h4>
+                  <button className="secondary" onClick={open} data-testid="open-results">
+                    Open in new window ↗
+                  </button>
+                </div>
+                {results}
+              </div>
+            )}
+          </Panel>
+        </Group>
+      </div>
       <Popup>
-        <div className="popup-panel">
-          <h2>Search results</h2>
-          <p className="muted">
-            The query form stays in the main window — edit the filters there and watch this table
-            update live.
-          </p>
-          {results}
-        </div>
+        <div className="popup-grid-panel">{results}</div>
       </Popup>
     </div>
   )
