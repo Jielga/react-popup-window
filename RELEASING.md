@@ -59,9 +59,20 @@ exists to do:
    this repository as the `NPM_TOKEN` secret.
 2. Run **Bootstrap publish** from the Actions tab. It publishes the version
    currently in `package.json` (`0.1.0`).
-3. On npmjs.com, under the package's **Settings -> Trusted publisher**, add
-   GitHub Actions with organization `Jielga`, repository `react-popup-window`
-   and workflow `release.yml`.
+3. Point the package's trusted publisher at this workflow, either on npmjs.com
+   under **Settings -> Trusted publisher**, or from the CLI (npm >= 11.15.0,
+   2FA required):
+
+   ```sh
+   npm trust github @jielga/react-popup-window \
+     --repository Jielga/react-popup-window \
+     --workflow release.yml \
+     --allow-publish
+   ```
+
+   `--allow-publish` is not optional: configurations created after 2026-05-20
+   must name at least one permitted action, and a publisher configured without
+   it authenticates but refuses to publish.
 4. Delete the `NPM_TOKEN` secret and `.github/workflows/bootstrap-publish.yml`.
 
 After step 4 the everyday flow above takes over, and no npm credential exists in
