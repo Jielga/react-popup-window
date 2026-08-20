@@ -238,7 +238,11 @@ npm test                # unit tests (Vitest, jsdom)
 npm run e2e             # end-to-end tests (Playwright)
 npm run build           # build the library into dist/
 npm run skills:validate # validate agent skills
+npm run changeset       # describe a change for the changelog and the next release
 ```
+
+Releases are published to npm by Changesets when the **chore: version packages**
+pull request is merged — see [RELEASING.md](./RELEASING.md).
 
 ## License
 

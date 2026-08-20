@@ -1,14 +1,13 @@
 ---
 name: popup-content
 description: >
-  Render real application UI inside the popup window: stylesheet
-  synchronization (copyStyles, CSSOM serialization, root class and data-*
-  attributes, adoptedStyleSheets), theme switching across windows,
-  bounded-height layouts for virtualized content, and third-party component
-  libraries whose overlays portal to document.body (Mantine, Radix, MUI).
-  Load when popup content renders unstyled, a theme change does not reach
-  the popup, or menus, popovers, modals, and tooltips open in the main
-  window instead of the popup.
+  Render real application UI inside the popup window: stylesheet synchronization
+  (copyStyles, CSSOM serialization, root class and data-* attributes,
+  adoptedStyleSheets), theme switching across windows, bounded-height layouts
+  for virtualized content, and third-party component libraries whose overlays
+  portal to document.body (Mantine, Radix, MUI). Load when popup content renders
+  unstyled, a theme change does not reach the popup, or menus, popovers, modals,
+  and tooltips open in the main window instead of the popup.
 metadata:
   type: sub-skill
   library: '@jielga/react-popup-window'

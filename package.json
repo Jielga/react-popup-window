@@ -55,6 +55,9 @@
     "e2e": "playwright test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "skills:validate": "intent validate",
+    "changeset": "changeset",
+    "version-packages": "changeset version && node scripts/sync-skill-version.mjs",
+    "release": "changeset publish",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
@@ -66,6 +69,8 @@
     "provenance": true
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^1.0.0",
+    "@changesets/cli": "^3.0.1",
     "@jielga/tmdatagrid": "^0.5.0",
     "@mantine/core": "^9.5.1",
     "@mantine/hooks": "^9.5.1",
