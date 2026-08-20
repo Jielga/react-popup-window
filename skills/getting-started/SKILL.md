@@ -1,13 +1,13 @@
 ---
 name: getting-started
 description: >
-  Set up @jielga/react-popup-window: the usePopupWindow hook, the Popup
-  portal component, window controls (open, close, toggle, focus), reactive
-  state (isOpen, isBlocked, popupWindow), and hook options (title, name,
-  features, center, copyStyles, onOpen, onClose, onBlocked). Load when
-  opening part of a React tree in a separate browser window, building an
-  "open in new window" or detachable panel, or when a popup is blocked,
-  closes unexpectedly, or loses state.
+  Set up @jielga/react-popup-window: the usePopupWindow hook, the Popup portal
+  component, window controls (open, close, toggle, focus), reactive state
+  (isOpen, isBlocked, popupWindow), and hook options (title, name, features,
+  center, copyStyles, onOpen, onClose, onBlocked). Load when opening part of a
+  React tree in a separate browser window, building an "open in new window" or
+  detachable panel, or when a popup is blocked, closes unexpectedly, or loses
+  state.
 metadata:
   type: core
   library: '@jielga/react-popup-window'

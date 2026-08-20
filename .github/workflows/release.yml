@@ -1,28 +1,65 @@
-# Publishes to npm when a GitHub release is published.
-# Requires an npm automation token in the NPM_TOKEN repository secret.
 name: Release
 
+# Changesets owns releases. Pushing to main opens (or updates) a "Version
+# Packages" PR that bumps package.json, writes CHANGELOG.md and syncs the
+# skills' library_version. Merging that PR publishes to npm.
+#
+# Nothing publishes from a normal push - the release only happens when the
+# version PR is merged, which is itself just another push to main.
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+
+# A second run while the first is mid-publish would race on the version PR
+# branch and on the registry.
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
-  contents: read
-  id-token: write # npm provenance
+  contents: write # commit the version PR, push tags, create releases
+  pull-requests: write # open and update the version PR
+  id-token: write # npm trusted publishing (auth) and provenance
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # changelog-github links each entry back to its commit, so it needs
+          # more than the default shallow clone.
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          # Trusted publishing needs npm >= 11.5.1; Node 24 ships it, Node 22
+          # does not.
+          node-version: 24
           registry-url: https://registry.npmjs.org
+          cache: npm
+
       - run: npm ci
+
       - run: npm run typecheck
+
+      - run: npm run skills:validate
+
       - run: npm test
-      - run: npm publish
+
+      # `publish` runs only when there are no changesets left to consume, i.e.
+      # on the merge of the version PR. `prepublishOnly` rebuilds dist from this
+      # commit, so a stale build cannot reach the registry.
+      #
+      # There is no npm token: the registry authenticates this job through
+      # trusted publishing, configured package-side on npmjs.com against this
+      # repo and this workflow filename. Renaming this file breaks publishing,
+      # and a broken config surfaces as a misleading `E404 ... PUT` on publish.
+      # See RELEASING.md.
+      - uses: changesets/action@v1.9.0
+        with:
+          version: npm run version-packages
+          publish: npm run release
+          commit: "chore: version packages"
+          title: "chore: version packages"
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
