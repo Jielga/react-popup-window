@@ -206,6 +206,11 @@ popup document instead:
   hook, or in an external store.
 - The popup closes when the owning component unmounts and when the opener
   window unloads. The popup document cannot outlive the opener.
+- Popup content is unmounted before the window is destroyed (from the
+  popup's `pagehide`/`beforeunload`, and before `window.close()`), so effect
+  cleanups still see a live document. Code that keeps a reference to the
+  popup `Window` beyond that — a timer, a promise callback — must still
+  check `popupWindow.closed`: the context is gone once the window is.
 
 ## Agent skills
 

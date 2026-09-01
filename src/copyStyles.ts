@@ -129,7 +129,26 @@ export function copyStyles(source: Document, target: Document, watch = true): ()
     return () => {}
   }
 
+  let stopped = false
+  const stop = (): void => {
+    if (stopped) return
+    stopped = true
+    headObserver.disconnect()
+    rootObserver.disconnect()
+  }
+
+  // The popup document is torn down when its window closes; touching it after
+  // that throws ("detached context") in some browsers. Stop syncing instead.
+  // A target that never had a window (e.g. `createHTMLDocument`) is fine.
+  const targetHadView = target.defaultView !== null
+  const targetIsGone = (): boolean =>
+    (targetHadView && target.defaultView === null) || !target.head
+
   const headObserver = new MutationObserver((records) => {
+    if (targetIsGone()) {
+      stop()
+      return
+    }
     for (const record of records) {
       if (record.type === 'characterData') {
         const parent = record.target.parentElement
@@ -157,12 +176,15 @@ export function copyStyles(source: Document, target: Document, watch = true): ()
   })
   headObserver.observe(source.head, { childList: true, subtree: true, characterData: true })
 
-  const rootObserver = new MutationObserver(() => syncRootAttrs())
+  const rootObserver = new MutationObserver(() => {
+    if (targetIsGone()) {
+      stop()
+      return
+    }
+    syncRootAttrs()
+  })
   rootObserver.observe(source.documentElement, { attributes: true })
   if (source.body) rootObserver.observe(source.body, { attributes: true })
 
-  return () => {
-    headObserver.disconnect()
-    rootObserver.disconnect()
-  }
+  return stop
 }

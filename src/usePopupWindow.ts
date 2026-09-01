@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { FC } from 'react'
-import { createPortal } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import { copyStyles } from './copyStyles'
 import type {
   PopupProps,
@@ -97,16 +97,25 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
   optionsRef.current = options
 
   const cleanupRef = useRef<(() => void) | null>(null)
+  const unmountPortalRef = useRef<((flush: boolean) => void) | null>(null)
 
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot)
 
   // `userClosed` is true when the window was closed outside our control
   // (user hit the close button, opener unloaded) — then we must not touch it.
+  //
+  // `flush` unmounts the portal content synchronously *before* the window
+  // goes away, so effect cleanups in the popup subtree still see a live
+  // document. It must stay false when we are called from a React lifecycle
+  // (the owner unmounting) — React is tearing the subtree down itself there,
+  // and `flushSync` from inside a lifecycle warns.
   const closePopup = useCallback(
-    (userClosed: boolean) => {
+    (userClosed: boolean, flush = false) => {
       const { popupWindow } = store.getSnapshot()
+      if (popupWindow && !userClosed && !popupWindow.closed) unmountPortalRef.current?.(flush)
       cleanupRef.current?.()
       cleanupRef.current = null
+      unmountPortalRef.current = null
       if (!popupWindow) return
       if (!userClosed && !popupWindow.closed) popupWindow.close()
       store.setState({ popupWindow: null, container: null })
@@ -144,14 +153,35 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
     doc.body.appendChild(container)
 
     const handleExternalClose = () => closePopup(true)
-    const onPopupPagehide = () => {
+
+    // Unmount the portal content while the popup document is still alive.
+    //
+    // When the user closes the window by hand, the document is torn down
+    // immediately: by the next task its `defaultView` is null and its
+    // execution context is detached. Effect cleanups in the popup subtree
+    // that touch anything window-level of that document — storage APIs,
+    // observers, `getComputedStyle`, a captured `ownerDocument.defaultView` —
+    // then fail, e.g. Chromium's "Cache storage isn't available on detached
+    // context". `pagehide`/`beforeunload` still run against a live document,
+    // so tear the portal down synchronously from there.
+    const unmountPortal = (flush: boolean) => {
+      if (!store.getSnapshot().container) return
+      if (flush) flushSync(() => store.setState({ container: null }))
+      else store.setState({ container: null })
+    }
+    unmountPortalRef.current = unmountPortal
+
+    const onPopupUnload = () => {
+      unmountPortal(true)
       // pagehide also fires on navigation; only treat it as a close when the
-      // window really is gone a tick later.
+      // window really is gone a tick later. (The content is unmounted either
+      // way — the container element belongs to the outgoing document.)
       setTimeout(() => {
         if (popupWindow.closed) handleExternalClose()
       }, 0)
     }
-    popupWindow.addEventListener('pagehide', onPopupPagehide)
+    popupWindow.addEventListener('pagehide', onPopupUnload)
+    popupWindow.addEventListener('beforeunload', onPopupUnload)
 
     // Belt and braces: some browsers don't fire pagehide reliably for popups.
     const closePoll = window.setInterval(() => {
@@ -164,7 +194,8 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
     cleanupRef.current = () => {
       window.clearInterval(closePoll)
       window.removeEventListener('pagehide', onOpenerPagehide)
-      popupWindow.removeEventListener('pagehide', onPopupPagehide)
+      popupWindow.removeEventListener('pagehide', onPopupUnload)
+      popupWindow.removeEventListener('beforeunload', onPopupUnload)
       stopStyleSync?.()
     }
 
@@ -173,11 +204,11 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
     return popupWindow
   }, [store, closePopup])
 
-  const close = useCallback(() => closePopup(false), [closePopup])
+  const close = useCallback(() => closePopup(false, true), [closePopup])
 
   const toggle = useCallback(() => {
     if (store.getSnapshot().popupWindow) {
-      closePopup(false)
+      closePopup(false, true)
     } else {
       open()
     }
