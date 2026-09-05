@@ -128,9 +128,10 @@ function ResultsGrid({ filters }: { filters: Filters }) {
           <TMDataGrid.SummaryCount />
           <TMDataGrid.Spacer />
           <TMDataGrid.FilterButton />
-          <TMDataGrid.ColumnsButton />
+          <TMDataGrid.Menu>
+            <TMDataGrid.Menu.Columns />
+          </TMDataGrid.Menu>
         </TMDataGrid.Toolbar>
-        <TMDataGrid.FilterPanel />
         <TMDataGrid.Table<Person> />
       </TMDataGrid>
     </SameWindowPortals>

@@ -28,7 +28,7 @@ test('counter: events and state work across windows', async ({ page }) => {
   await expect(popup.getByTestId('popup-count')).toHaveText('2')
   await expect(page.getByTestId('parent-count')).toHaveText('2')
 
-  // Styles were copied — the button is not an unstyled default.
+  // Styles were copied - the button is not an unstyled default.
   const radius = await popup
     .getByTestId('increment')
     .evaluate((el) => getComputedStyle(el).borderRadius)
@@ -66,6 +66,32 @@ test('data grid detaches into popup with TanStack Query and Mantine context inta
   await expect.poll(() => popup.isClosed()).toBe(true)
 })
 
+test('columns can be resized by dragging inside the popup window', async ({ page }) => {
+  const popup = await openPopup(page, 'open-table')
+  const grid = popup.getByTestId('people-grid')
+  await expect(grid).toBeVisible()
+  await grid.scrollIntoViewIfNeeded()
+
+  // A pointer drag started in the popup only works when the grid attaches its
+  // move/up listeners to the POPUP document. Attached to the opener's document
+  // - the bare `document` global - the drag is dead in the popup.
+  const header = grid.getByRole('columnheader').nth(1)
+  const separator = header.locator('[class*="columnSeparator"]')
+  const before = await header.boundingBox()
+  const handle = await separator.boundingBox()
+  if (!before || !handle) throw new Error('header or resize handle not rendered')
+
+  await popup.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
+  await popup.mouse.down()
+  await popup.mouse.move(handle.x + handle.width / 2 + 40, handle.y + handle.height / 2, { steps: 5 })
+  await popup.mouse.move(handle.x + handle.width / 2 + 80, handle.y + handle.height / 2, { steps: 5 })
+  await popup.mouse.up()
+
+  await expect.poll(async () => (await header.boundingBox())?.width ?? 0).toBeGreaterThan(
+    before.width + 50,
+  )
+})
+
 test('closing the popup window itself restores the main window grid', async ({ page }) => {
   const popup = await openPopup(page, 'open-table')
   await expect(page.getByTestId('table-detached-note')).toBeVisible()
@@ -91,7 +117,7 @@ test('panels: popped-out grid follows filters edited in the main window', async 
   await expect(popup.getByText('400 / 400')).toBeVisible()
   await expect(popup.getByText(PEOPLE_400[0].name)).toBeVisible()
 
-  // Filter from the MAIN window — the popped-out grid updates live.
+  // Filter from the MAIN window - the popped-out grid updates live.
   const needle = 'lindqvist'
   const byName = PEOPLE_400.filter((p) => p.name.toLowerCase().includes(needle)).length
   expect(byName).toBeGreaterThan(0)
@@ -121,11 +147,30 @@ test('mantine popovers opened from the popped-out grid stay in the popup window'
   const popup = await openPopup(page, 'open-results')
   await expect(popup.getByText(PEOPLE_400[0].name)).toBeVisible()
 
-  // The column manager popover portals — thanks to the SameWindowPortals
+  // The column manager popover portals - thanks to the SameWindowPortals
   // wrapper it must land in the POPUP document, not the main window's body.
-  await popup.getByRole('button', { name: 'Manage columns' }).click()
+  await popup.getByRole('button', { name: 'Menu' }).click()
   await expect(popup.getByText('Show/Hide All')).toBeVisible()
   await expect(page.getByText('Show/Hide All')).toHaveCount(0)
+})
+
+test('mantine modal opened from the popped-out grid stays in the popup window', async ({
+  page,
+}) => {
+  const popup = await openPopup(page, 'open-table')
+  await expect(popup.getByText(PEOPLE_12[0].name)).toBeVisible()
+
+  await popup.getByTestId('open-details').click()
+
+  // The Modal portals - with the SameWindowPortals wrapper it must render in
+  // the POPUP document, not in the main window's body.
+  await expect(popup.getByTestId('details-body')).toBeVisible()
+  await expect(page.getByTestId('details-body')).toHaveCount(0)
+
+  // Escape closes it. Mantine binds its Escape handler on the opener window,
+  // so this passes only because the example listens on the popup window too.
+  await popup.keyboard.press('Escape')
+  await expect(popup.getByTestId('details-body')).toHaveCount(0)
 })
 
 test('dark mode toggled in the main window propagates to the popup', async ({ page }) => {

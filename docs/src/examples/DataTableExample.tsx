@@ -1,10 +1,12 @@
-import { Badge } from '@mantine/core'
+import { Badge, Modal } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
 import {
   createTMDataGridColumnHelper,
   TMDataGrid,
   useTMDataGrid,
 } from '@jielga/tmdatagrid'
+import type { TMDataGridPersistence } from '@jielga/tmdatagrid'
 import { usePopupWindow } from '@jielga/react-popup-window'
 import { fetchPeople } from './people'
 import type { Person } from './people'
@@ -29,42 +31,86 @@ const columns = columnHelper.columns([
 
 const EMPTY: Person[] = []
 
+// Module scope: the object is a dependency of the write subscription, so it
+// has to keep its identity across renders. localStorage is per origin, not
+// per window, so the layout the user set here is restored when the grid
+// remounts in the popup - and again on the next page load.
+const persist = {
+  dataKey: 'react-popup-window.people.data',
+  settingsKey: 'react-popup-window.people.settings',
+} satisfies TMDataGridPersistence
+
 function PeopleGrid() {
   // Resolves against the QueryClientProvider mounted in the MAIN window's
-  // tree — even while the grid is rendered in the popup. The same goes for
+  // tree - even while the grid is rendered in the popup. The same goes for
   // the MantineProvider the grid requires.
   const { data, isFetching, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['people', 12],
     queryFn: () => fetchPeople(12),
   })
 
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const hostRef = useRef<HTMLDivElement>(null)
+
+  // Mantine's Modal binds its Escape handler on the bare `window` - the MAIN
+  // window, since popup content executes in the opener's realm. Bind our own
+  // on the window this grid is actually rendered in.
+  useEffect(() => {
+    if (!detailsOpen) return
+    const win = hostRef.current?.ownerDocument.defaultView
+    if (!win) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDetailsOpen(false)
+    }
+    win.addEventListener('keydown', onKeyDown)
+    return () => win.removeEventListener('keydown', onKeyDown)
+  }, [detailsOpen])
+
   const grid = useTMDataGrid({
     data: data ?? EMPTY,
     columns,
     getRowId: (row) => String(row.id),
     enableRowSelection: false,
+    persist,
     meta: { loading: !data },
   })
 
   return (
-    <div className="grid-host" data-testid="people-grid">
-      <div className="row grid-query-row">
-        <button className="secondary" onClick={() => refetch()} disabled={isFetching}>
-          {isFetching ? 'Refetching…' : 'Refetch (TanStack Query)'}
-        </button>
-        <span className="muted" style={{ fontSize: '0.8rem' }}>
-          {dataUpdatedAt ? `updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : 'loading…'}
-        </span>
-      </div>
+    <div className="grid-host" data-testid="people-grid" ref={hostRef}>
       <SameWindowPortals>
+        <div className="row grid-query-row">
+          <button className="secondary" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? 'Refetching…' : 'Refetch (TanStack Query)'}
+          </button>
+          <button
+            className="secondary"
+            onClick={() => setDetailsOpen(true)}
+            data-testid="open-details"
+          >
+            Dataset details
+          </button>
+          <span className="muted" style={{ fontSize: '0.8rem' }}>
+            {dataUpdatedAt ? `updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : 'loading…'}
+          </span>
+        </div>
         <TMDataGrid {...grid} size="sm" style={{ flex: 1, minHeight: 0 }}>
           <TMDataGrid.Toolbar>
             <TMDataGrid.SummaryCount />
             <TMDataGrid.Spacer />
-            <TMDataGrid.ColumnsButton />
+            <TMDataGrid.Menu>
+              <TMDataGrid.Menu.Columns />
+            </TMDataGrid.Menu>
           </TMDataGrid.Toolbar>
           <TMDataGrid.Table<Person> />
         </TMDataGrid>
+        <Modal opened={detailsOpen} onClose={() => setDetailsOpen(false)} title="Dataset details">
+          <p data-testid="details-body">
+            12 people fetched through TanStack Query and cached under the{' '}
+            <code>['people', 12]</code> key. This modal portals like any other Mantine overlay: with
+            the <code>SameWindowPortals</code> wrapper it opens in the window the grid is rendered
+            in, popup included.
+          </p>
+        </Modal>
       </SameWindowPortals>
     </div>
   )

@@ -7,11 +7,11 @@
   "author": "jielga",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jielga/react-popup-window.git"
+    "url": "git+https://github.com/Jielga/react-popup-window.git"
   },
   "homepage": "https://jielga.github.io/react-popup-window/",
   "bugs": {
-    "url": "https://github.com/jielga/react-popup-window/issues"
+    "url": "https://github.com/Jielga/react-popup-window/issues"
   },
   "keywords": [
     "react",
@@ -54,7 +54,7 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "skills:validate": "intent validate",
+    "skills:validate": "node node_modules/@tanstack/intent/dist/cli.mjs validate",
     "changeset": "changeset",
     "version-packages": "changeset version && node scripts/sync-skill-version.mjs",
     "release": "changeset publish",
@@ -71,18 +71,19 @@
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",
     "@changesets/cli": "^3.0.1",
-    "@jielga/tmdatagrid": "^0.5.0",
+    "@jielga/tmdatagrid": "^2.0.0-beta.15",
     "@mantine/core": "^9.5.1",
     "@mantine/hooks": "^9.5.1",
     "@playwright/test": "^1.62.1",
     "@tabler/icons-react": "^3.46.0",
     "@tanstack/intent": "^0.3.6",
+    "@tanstack/react-form": "^1.33.5",
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-store": "^0.11.1",
-    "@tanstack/react-table": "9.0.0-beta.21",
+    "@tanstack/react-table": "^9.2.4",
     "@tanstack/react-virtual": "^3.14.9",
     "@tanstack/store": "^0.11.1",
-    "@tanstack/table-core": "9.0.0-beta.21",
+    "@tanstack/table-core": "^9.2.4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^26.1.2",

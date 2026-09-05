@@ -131,7 +131,20 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
       return null
     }
 
-    const doc = popupWindow.document
+    // Sandboxed embedders (VS Code's built-in browser, CodeSandbox/StackBlitz
+    // previews, iframes sandboxed without popup-escape) open the popup with an
+    // opaque origin, so reading its document throws a SecurityError. Treat
+    // that as blocked instead of stranding a blank window the portal can
+    // never reach.
+    let doc: Document
+    try {
+      doc = popupWindow.document
+    } catch {
+      popupWindow.close()
+      store.setState({ blocked: true })
+      opts.onBlocked?.()
+      return null
+    }
     doc.title = opts.title ?? document.title
 
     let stopStyleSync: (() => void) | undefined
