@@ -156,6 +156,37 @@ describe('usePopupWindow', () => {
     expect(onBlocked).toHaveBeenCalledTimes(1)
   })
 
+  it('reports blocked when the popup document is not scriptable (sandboxed embedder)', () => {
+    let closed = false
+    const sandboxedWin = {
+      get document(): Document {
+        throw new DOMException(
+          'Blocked a frame with origin "null" from accessing a cross-origin frame.',
+          'SecurityError',
+        )
+      },
+      get closed() {
+        return closed
+      },
+      close() {
+        closed = true
+      },
+    } as unknown as Window
+    vi.spyOn(window, 'open').mockReturnValue(sandboxedWin)
+
+    const onBlocked = vi.fn()
+    const getApi = renderHarness({ onBlocked })
+    let result: Window | null = sandboxedWin
+    act(() => {
+      result = getApi().open()
+    })
+    expect(result).toBeNull()
+    expect(getApi().isBlocked).toBe(true)
+    expect(getApi().isOpen).toBe(false)
+    expect(onBlocked).toHaveBeenCalledTimes(1)
+    expect(closed).toBe(true)
+  })
+
   it('closes the popup when the owning component unmounts', () => {
     const getApi = renderHarness()
     act(() => {

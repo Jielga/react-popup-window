@@ -37,7 +37,11 @@ export interface UsePopupWindowOptions {
   onOpen?: (popupWindow: Window) => void
   /** Called when the popup closes — via `close()`, the user, or the opener unloading. */
   onClose?: () => void
-  /** Called when `window.open` returns `null` (popup blocked by the browser). */
+  /**
+   * Called when the popup cannot be used: `window.open` returned `null`
+   * (blocked by the browser), or the popup's document is not scriptable
+   * because a sandboxed embedder gave it an opaque origin.
+   */
   onBlocked?: () => void
 }
 
@@ -60,7 +64,10 @@ export interface PopupWindowApi {
   focus: () => void
   /** Whether the popup window is currently open. */
   isOpen: boolean
-  /** Whether the last `open()` attempt was blocked by the browser. */
+  /**
+   * Whether the last `open()` attempt was blocked — by the browser, or by a
+   * sandboxed embedder whose popups are not scriptable.
+   */
   isBlocked: boolean
   /**
    * The popup `Window` while open, otherwise `null`. Escape hatch for
