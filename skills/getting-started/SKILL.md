@@ -162,7 +162,7 @@ Popup content unmounts and remounts when it moves between windows, so state
 held inside it is discarded. State held by the component that owns the hook
 persists, because that component never moves.
 
-Source: README.md (Remounting)
+Source: README.md (Limitations)
 
 ### MEDIUM Messaging the opener from a portal event handler
 
@@ -186,7 +186,7 @@ main window. `postMessage` is only meaningful for scripts hosted in the
 popup document itself; for portal content, props, state, and context are
 the communication channel.
 
-Source: README.md (Communicating with popup content)
+Source: README.md (Communication)
 
 ### MEDIUM Keeping the popup open across owner unmount or navigation
 

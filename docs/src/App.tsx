@@ -43,9 +43,9 @@ return (
   </>
 )`
 
-const PORTAL_TARGET_SNIPPET = `// Mantine portals (menus, popovers, tooltips) mount into the MAIN window's
-// document.body — wrong window when the trigger lives in the popup. Portal
-// reads default props from the nearest Mantine theme, so: detect the
+const PORTAL_TARGET_SNIPPET = `// Mantine portals (menus, popovers, modals, tooltips) mount into the MAIN
+// window's document.body - wrong window when the trigger lives in the popup.
+// Portal reads default props from the nearest Mantine theme, so: detect the
 // document we got mounted into and provide its body as the portal target.
 export function SameWindowPortals({ children }) {
   const probeRef = useRef(null)
@@ -54,7 +54,7 @@ export function SameWindowPortals({ children }) {
 
   const theme = useMemo(() => ({
     components: {
-      Portal: Portal.extend({ defaultProps: target ? { target, reuseTargetNode: false } : {} }),
+      Portal: Portal.extend({ defaultProps: target ? { target } : {} }),
     },
   }), [target])
 
@@ -158,7 +158,11 @@ function AppInner() {
               <code>useQuery</code>. The <code>QueryClientProvider</code> and the{' '}
               <code>MantineProvider</code> the grid requires are mounted once, in the main window's
               tree; the popup content reaches them through React context. While detached, the main
-              window hides the grid.
+              window hides the grid. The Dataset details button opens a Mantine Modal that follows
+              the grid: detached, it opens inside the popup window. The grid persists its state to{' '}
+              <code>localStorage</code>, which is shared by both windows - hide, resize or reorder a
+              column here, and the layout is still there after popping the grid out or reloading
+              the page.
             </p>
             <div className="demo">
               <DataTableExample />
@@ -189,14 +193,17 @@ function AppInner() {
           </div>
 
           <div className="card">
-            <h3>UI libraries that portal to document.body</h3>
+            <h3>Menus, modals and tooltips opening in the wrong window</h3>
             <p>
-              Component libraries render menus, popovers and tooltips through portals into{' '}
+              Component libraries render menus, popovers, modals and tooltips through portals into{' '}
               <code>document.body</code>, which is the main window's body even for components
               rendered inside the popup. Mantine reads portal defaults from its theme, so a small
               wrapper can redirect portals to the document its children are rendered in. The grids
-              on this page use this wrapper; a column menu opened in a popped-out grid stays in the
-              popup window.
+              on this page use this wrapper; a column menu or the Dataset details modal opened in a
+              popped-out grid stays in the popup window. Handlers a component binds on the bare{' '}
+              <code>window</code> still attach to the main window - Mantine's Modal listens for
+              Escape there - so the grid example adds its own Escape listener on the window it is
+              rendered in.
             </p>
             <pre>
               <code>{PORTAL_TARGET_SNIPPET}</code>

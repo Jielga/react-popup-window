@@ -125,7 +125,7 @@ interface UsePopupWindowOptions {
   onOpen?: (popupWindow: Window) => void
   /** Called when the popup closes: close(), user close, or opener unload. */
   onClose?: () => void
-  /** Called when window.open returns null (popup blocked). */
+  /** Called when the popup is blocked or its document is not scriptable. */
   onBlocked?: () => void
 }
 ```
@@ -181,19 +181,99 @@ run in the popup's realm and can post to `window.opener`; the exposed
 own realm — the browser reports the main window, not the popup, as
 `event.source`.
 
-## Portal-based UI libraries
+## Keep overlays in the popup window
 
-Component libraries typically mount overlays — menus, popovers, modals,
-tooltips — into `document.body`, which is the main window's body even for
-components rendered inside the popup. Provide a portal target inside the
-popup document instead:
+Component libraries mount overlays - menus, popovers, modals, tooltips -
+through portals into `document.body`. Popup content executes in the
+opener's JavaScript realm, so the bare `document` global is the main
+window's document even for components rendered inside the popup, and the
+overlay opens in the main window. The `ownerDocument` of a node rendered
+inside the popup is the popup's document; the portal container must come
+from there. The rule covers any portal, including a raw `createPortal` in
+application code.
 
-- Mantine: portal defaults can be set through the theme. See
-  [`SameWindowPortals`](docs/src/examples/SameWindowPortals.tsx) for a
-  wrapper that resolves its own `ownerDocument` and supplies that
-  document's body as the default `Portal` target.
-- Radix, MUI, and similar: use the per-component portal `container` prop
-  with `popupWindow.document.body`.
+### Mantine
+
+Mantine reads portal defaults from the theme. The following wrapper
+resolves its own `ownerDocument` after mount and supplies that document's
+body as the default `Portal` target, so `Menu`, `Popover`, `Tooltip`, and
+`Modal` open in the window they are rendered in:
+
+```tsx
+import { MantineThemeProvider, Portal } from '@mantine/core'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+
+export function SameWindowPortals({ children }: { children: ReactNode }) {
+  const probeRef = useRef<HTMLDivElement>(null)
+  const [target, setTarget] = useState<HTMLElement | null>(null)
+
+  useEffect(() => {
+    setTarget(probeRef.current?.ownerDocument.body ?? null)
+  }, [])
+
+  const theme = useMemo(
+    () => ({
+      components: {
+        Portal: Portal.extend({ defaultProps: target ? { target } : {} }),
+      },
+    }),
+    [target],
+  )
+
+  return (
+    <div ref={probeRef} style={{ display: 'contents' }}>
+      <MantineThemeProvider inherit theme={theme}>
+        {children}
+      </MantineThemeProvider>
+    </div>
+  )
+}
+```
+
+Render the wrapper inside `<Popup>`, around the content that opens
+overlays; it resolves the container from the tree it mounts in, so the
+same component also works inline. The
+[live examples](https://jielga.github.io/react-popup-window/) use it
+around each grid, including a `Modal` opened from a popped-out grid; the
+shipped `popup-content` skill contains the same code and the common
+mistakes around it.
+
+Mantine's own portal props interact with the wrapper as follows:
+
+- An explicit `target` or `portalProps` on a component overrides the
+  theme default, so the overlay opens in the main window again.
+- `withinPortal={false}` needs no wrapper: the overlay renders inline and
+  therefore inside the popup document. It then clips against
+  `overflow: hidden` ancestors and local stacking contexts, which is why
+  the theme default is preferred.
+
+### Radix, MUI, and similar
+
+Pass the per-component portal `container` prop an element of the popup
+document: `popupWindow.document.body` where the hook's result is in
+scope, or `node.ownerDocument.body` from a ref on any rendered node
+deeper in the tree - the same probe the wrapper above uses.
+
+### Window-bound overlay behavior
+
+A correctly placed overlay can still bind window-level behavior to the
+main window, because those bindings also run in the opener's realm.
+Mantine's `Modal` listens for Escape with `window.addEventListener` and
+locks scroll on the main window's body, so Escape pressed in the popup
+does not close the modal. This cannot be redirected from outside the
+component; for state you own, add a listener on the popup window:
+
+```tsx
+// Close our own modal on Escape pressed in the popup.
+useEffect(() => {
+  if (!opened) return
+  const win = hostRef.current?.ownerDocument.defaultView
+  const onKeyDown = (e: KeyboardEvent) => e.key === 'Escape' && setOpened(false)
+  win?.addEventListener('keydown', onKeyDown)
+  return () => win?.removeEventListener('keydown', onKeyDown)
+}, [opened])
+```
 
 ## Limitations
 
@@ -206,6 +286,12 @@ popup document instead:
   hook, or in an external store.
 - The popup closes when the owning component unmounts and when the opener
   window unloads. The popup document cannot outlive the opener.
+- Sandboxed embedders — VS Code's built-in browser, CodeSandbox and
+  StackBlitz previews, iframes sandboxed without
+  `allow-popups-to-escape-sandbox` — open popups with an opaque origin the
+  opener cannot script, so the portal cannot render into them. `open()`
+  detects this, closes the window, reports it through `isBlocked` and
+  `onBlocked`, and returns `null`. Use a real browser tab instead.
 
 ## Agent skills
 
