@@ -54,7 +54,7 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "skills:validate": "intent validate",
+    "skills:validate": "node node_modules/@tanstack/intent/dist/cli.mjs validate",
     "changeset": "changeset",
     "version-packages": "changeset version && node scripts/sync-skill-version.mjs",
     "release": "changeset publish",
