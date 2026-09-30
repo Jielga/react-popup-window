@@ -117,7 +117,7 @@ interface UsePopupWindowOptions {
   features?: PopupWindowFeatures // merged over { popup: true, width: 640, height: 480 }
   center?: boolean      // center over the opener window; default true
   copyStyles?: boolean  // mirror and live-sync stylesheets; default true
-  onOpen?: (popupWindow: Window) => void
+  onOpen?: (popupWindow: Window) => void // Popup starts rendering into the popup
   onClose?: () => void  // close(), user close, or opener unload
   onBlocked?: () => void
 }

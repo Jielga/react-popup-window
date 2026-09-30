@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { FC } from 'react'
 import { createPortal } from 'react-dom'
-import { copyStyles } from './copyStyles'
+import { mirrorStyles } from './copyStyles'
 import type {
   PopupProps,
   PopupWindowApi,
   PopupWindowFeatures,
   UsePopupWindowOptions,
 } from './types'
+import { whenStylesheetsLoad } from './whenStylesheetsLoad'
 
 interface PopupState {
   popupWindow: Window | null
@@ -59,6 +60,8 @@ function buildFeatures(options: UsePopupWindowOptions): string {
 const ABOUT_BLANK = 'about:blank'
 /** Interval for checking whether the page given by `url` has loaded. */
 const LOAD_POLL_MS = 20
+/** Longest time `Popup` waits for copied stylesheets before rendering anyway. */
+const STYLES_TIMEOUT_MS = 3000
 
 /**
  * The popup's document once the page given by `url` has replaced the initial
@@ -182,6 +185,7 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
     let loadPoll: number | undefined
     let prepared = false
     let stopStyleSync: (() => void) | undefined
+    let stopStylesWait: (() => void) | undefined
 
     cleanupRef.current = () => {
       window.clearInterval(closePoll)
@@ -189,6 +193,7 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
       window.removeEventListener('pagehide', onOpenerPagehide)
       if (prepared) popupWindow.removeEventListener('pagehide', onPopupPagehide)
       stopStyleSync?.()
+      stopStylesWait?.()
     }
 
     // Title, styles and the portal container go into the document that
@@ -197,14 +202,21 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
       prepared = true
       popupWindow.addEventListener('pagehide', onPopupPagehide)
       doc.title = opts.title ?? document.title
+      let links: HTMLLinkElement[] = []
       if (opts.copyStyles !== false) {
-        stopStyleSync = copyStyles(document, doc)
+        const styles = mirrorStyles(document, doc)
+        stopStyleSync = styles.stop
+        links = styles.links
       }
       const container = doc.createElement('div')
       container.setAttribute('data-popup-window-root', '')
       doc.body.appendChild(container)
-      store.setState({ container })
-      opts.onOpen?.(popupWindow)
+      // The popup fetches copied <link> stylesheets asynchronously. Render
+      // only once they have loaded, so the first paint is not unstyled.
+      stopStylesWait = whenStylesheetsLoad(links, STYLES_TIMEOUT_MS, () => {
+        store.setState({ container })
+        opts.onOpen?.(popupWindow)
+      })
     }
 
     store.setState({ popupWindow, container: null, blocked: false })

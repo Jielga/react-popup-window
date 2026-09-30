@@ -301,6 +301,97 @@ describe('usePopupWindow', () => {
     vi.useRealTimers()
   })
 
+  describe('with a linked stylesheet in the opener', () => {
+    let openerLink: HTMLLinkElement
+
+    beforeEach(() => {
+      openerLink = document.createElement('link')
+      openerLink.rel = 'stylesheet'
+      openerLink.href = '/app.css'
+      document.head.appendChild(openerLink)
+    })
+
+    afterEach(() => {
+      openerLink.remove()
+    })
+
+    // jsdom does not load stylesheets: the popup's copy stays pending until a
+    // test dispatches `load` or `error` on it.
+    const popupLink = () => fake.doc.head.querySelector('link')!
+
+    it('renders once the copied stylesheet has loaded', () => {
+      const onOpen = vi.fn()
+      const getApi = renderHarness({ onOpen })
+      act(() => {
+        getApi().open()
+      })
+      expect(getApi().isOpen).toBe(true)
+      expect(fake.doc.body.textContent).not.toContain('hello from popup')
+      expect(onOpen).not.toHaveBeenCalled()
+
+      act(() => {
+        popupLink().dispatchEvent(new Event('load'))
+      })
+      expect(fake.doc.body.textContent).toContain('hello from popup')
+      expect(onOpen).toHaveBeenCalledWith(fake.win)
+    })
+
+    it('renders when the copied stylesheet fails to load', () => {
+      const getApi = renderHarness()
+      act(() => {
+        getApi().open()
+      })
+      act(() => {
+        popupLink().dispatchEvent(new Event('error'))
+      })
+      expect(fake.doc.body.textContent).toContain('hello from popup')
+    })
+
+    it('renders after 3 seconds when the copied stylesheet never loads', () => {
+      vi.useFakeTimers()
+      const getApi = renderHarness()
+      act(() => {
+        getApi().open()
+      })
+      act(() => {
+        vi.advanceTimersByTime(2999)
+      })
+      expect(fake.doc.body.textContent).not.toContain('hello from popup')
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(fake.doc.body.textContent).toContain('hello from popup')
+      vi.useRealTimers()
+    })
+
+    it('close() while the stylesheet loads leaves nothing behind', () => {
+      const onOpen = vi.fn()
+      const getApi = renderHarness({ onOpen })
+      act(() => {
+        getApi().open()
+      })
+      const link = popupLink()
+      act(() => {
+        getApi().close()
+      })
+      act(() => {
+        link.dispatchEvent(new Event('load'))
+      })
+      expect(getApi().isOpen).toBe(false)
+      expect(fake.doc.body.textContent).not.toContain('hello from popup')
+      expect(onOpen).not.toHaveBeenCalled()
+    })
+
+    it('renders at once with copyStyles: false', () => {
+      const getApi = renderHarness({ copyStyles: false })
+      act(() => {
+        getApi().open()
+      })
+      expect(fake.doc.head.querySelector('link')).toBeNull()
+      expect(fake.doc.body.textContent).toContain('hello from popup')
+    })
+  })
+
   it('closes the popup when the owning component unmounts', () => {
     const getApi = renderHarness()
     act(() => {

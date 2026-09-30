@@ -148,7 +148,7 @@ interface UsePopupWindowOptions {
   center?: boolean
   /** Mirror and synchronize stylesheets into the popup. Default: true. */
   copyStyles?: boolean
-  /** Called after the popup window is opened and prepared. */
+  /** Called when Popup starts rendering into the popup window. */
   onOpen?: (popupWindow: Window) => void
   /** Called when the popup closes: close(), user close, or opener unload. */
   onClose?: () => void
@@ -190,6 +190,12 @@ document and kept current:
 - `class`, `style`, and `data-*` attributes on `<html>` and `<body>`.
   Theme systems keyed on root attributes propagate to the popup.
 - `document.adoptedStyleSheets`.
+
+The popup loads each copied `<link>` stylesheet again.
+`Popup` renders once they have loaded or failed, so the first frame shown is styled.
+Alternate stylesheets and stylesheets whose `media` does not match are not waited for.
+If a stylesheet takes longer than 3 seconds, `Popup` renders without it.
+Note that a `<link>` added to the opener while the popup is open loads in the popup after the content is shown.
 
 Set `copyStyles: false` to disable.
 
