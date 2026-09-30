@@ -88,10 +88,35 @@ return (
 `isOpen` also updates when the user closes the window directly, so the
 inline branch is restored in every case.
 
+### Show your own URL in the address bar
+
+By default, the popup loads `about:blank`, and its address bar shows that.
+To show your own domain instead, set `url` to an empty page served on the same origin.
+For a Vite app, add `public/popup.html`:
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Loading</title>
+  </head>
+  <body></body>
+</html>
+```
+
+```tsx
+const { open, Popup } = usePopupWindow({ title: 'Panel', url: '/popup.html' })
+```
+
+`isOpen` turns `true` as soon as the window opens; `Popup` renders once the page has loaded.
+Important: do not point `url` at a route of the app, as that starts a second copy of the app inside the popup.
+If the page redirects to another origin, the popup closes and `onBlocked` is called.
+
 ## How it works
 
-The hook opens a same-origin `about:blank` window and creates a container
-element in its body. The `Popup` component renders its children with
+The hook opens a same-origin window, `about:blank` by default or the page
+set with `url`, and creates a container element in its body. The `Popup` component renders its children with
 `createPortal` into that container. A portal changes where DOM output is
 placed, not where the components sit in the tree, so popup content
 participates in the calling tree's state, context, and event system. React
@@ -115,6 +140,8 @@ interface UsePopupWindowOptions {
   title?: string
   /** window.open target name. The same name reuses the window. Default: '_blank'. */
   name?: string
+  /** Same-origin URL to load instead of about:blank, such as an empty /popup.html. Default: 'about:blank'. */
+  url?: string
   /** window.open features, merged over { popup: true, width: 640, height: 480 }. */
   features?: PopupWindowFeatures
   /** Center the popup over the opener when no left/top feature is given. Default: true. */
@@ -279,6 +306,9 @@ useEffect(() => {
 
 - Browsers do not allow hiding the address bar entirely. `popup: true`
   (the default) requests the minimal window chrome the platform provides.
+  By default, the bar shows `about:blank`; `url` replaces that with a page
+  of your own, see
+  [Show your own URL in the address bar](#show-your-own-url-in-the-address-bar).
 - `open()` must be called from a user gesture; otherwise the browser's
   popup blocker intervenes and `open()` returns `null`.
 - Popup content unmounts and remounts when it moves between windows. State

@@ -56,6 +56,21 @@ function buildFeatures(options: UsePopupWindowOptions): string {
     .join(',')
 }
 
+const ABOUT_BLANK = 'about:blank'
+/** Interval for checking whether the page given by `url` has loaded. */
+const LOAD_POLL_MS = 20
+
+/**
+ * The popup's document once the page given by `url` has replaced the initial
+ * `about:blank` document and finished parsing, otherwise `null`. Throws when
+ * the document is not scriptable.
+ */
+function loadedDocument(popupWindow: Window): Document | null {
+  const doc = popupWindow.document
+  if (doc.URL === ABOUT_BLANK || doc.readyState === 'loading') return null
+  return doc
+}
+
 function createPopupComponent(store: PopupStore): FC<PopupProps> {
   function Popup({ children }: PopupProps) {
     const { container } = useSyncExternalStore(
@@ -124,7 +139,8 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
     }
 
     const opts = optionsRef.current
-    const popupWindow = window.open('about:blank', opts.name ?? '_blank', buildFeatures(opts))
+    const url = opts.url ?? ABOUT_BLANK
+    const popupWindow = window.open(url, opts.name ?? '_blank', buildFeatures(opts))
     if (!popupWindow) {
       store.setState({ blocked: true })
       opts.onBlocked?.()
@@ -136,25 +152,15 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
     // opaque origin, so reading its document throws a SecurityError. Treat
     // that as blocked instead of stranding a blank window the portal can
     // never reach.
-    let doc: Document
+    let initialDoc: Document
     try {
-      doc = popupWindow.document
+      initialDoc = popupWindow.document
     } catch {
       popupWindow.close()
       store.setState({ blocked: true })
       opts.onBlocked?.()
       return null
     }
-    doc.title = opts.title ?? document.title
-
-    let stopStyleSync: (() => void) | undefined
-    if (opts.copyStyles !== false) {
-      stopStyleSync = copyStyles(document, doc)
-    }
-
-    const container = doc.createElement('div')
-    container.setAttribute('data-popup-window-root', '')
-    doc.body.appendChild(container)
 
     const handleExternalClose = () => closePopup(true)
     const onPopupPagehide = () => {
@@ -164,7 +170,6 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
         if (popupWindow.closed) handleExternalClose()
       }, 0)
     }
-    popupWindow.addEventListener('pagehide', onPopupPagehide)
 
     // Belt and braces: some browsers don't fire pagehide reliably for popups.
     const closePoll = window.setInterval(() => {
@@ -174,15 +179,63 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
     const onOpenerPagehide = () => popupWindow.close()
     window.addEventListener('pagehide', onOpenerPagehide)
 
+    let loadPoll: number | undefined
+    let prepared = false
+    let stopStyleSync: (() => void) | undefined
+
     cleanupRef.current = () => {
       window.clearInterval(closePoll)
+      window.clearInterval(loadPoll)
       window.removeEventListener('pagehide', onOpenerPagehide)
-      popupWindow.removeEventListener('pagehide', onPopupPagehide)
+      if (prepared) popupWindow.removeEventListener('pagehide', onPopupPagehide)
       stopStyleSync?.()
     }
 
-    store.setState({ popupWindow, container, blocked: false })
-    opts.onOpen?.(popupWindow)
+    // Title, styles and the portal container go into the document that
+    // stays: `about:blank` itself, or the page `url` loads in its place.
+    const prepare = (doc: Document) => {
+      prepared = true
+      popupWindow.addEventListener('pagehide', onPopupPagehide)
+      doc.title = opts.title ?? document.title
+      if (opts.copyStyles !== false) {
+        stopStyleSync = copyStyles(document, doc)
+      }
+      const container = doc.createElement('div')
+      container.setAttribute('data-popup-window-root', '')
+      doc.body.appendChild(container)
+      store.setState({ container })
+      opts.onOpen?.(popupWindow)
+    }
+
+    store.setState({ popupWindow, container: null, blocked: false })
+
+    if (url === ABOUT_BLANK) {
+      prepare(initialDoc)
+    } else {
+      // The window starts on an initial about:blank document and then
+      // navigates to `url`. Wait until that page has replaced it and parsed.
+      loadPoll = window.setInterval(() => {
+        if (popupWindow.closed) {
+          handleExternalClose()
+          return
+        }
+        let doc: Document | null
+        try {
+          doc = loadedDocument(popupWindow)
+        } catch {
+          // The page went somewhere the opener cannot script, such as a
+          // cross-origin redirect: nothing can ever render there.
+          closePopup(false)
+          store.setState({ blocked: true })
+          opts.onBlocked?.()
+          return
+        }
+        if (!doc) return
+        window.clearInterval(loadPoll)
+        prepare(doc)
+      }, LOAD_POLL_MS)
+    }
+
     return popupWindow
   }, [store, closePopup])
 

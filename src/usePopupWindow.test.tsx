@@ -6,18 +6,33 @@ import type { PopupWindowApi, UsePopupWindowOptions } from './types'
 
 interface FakePopup {
   win: Window
+  /** The initial about:blank document. */
   doc: Document
   /** Simulate the user closing the window. */
   closeByUser: () => void
+  /** Simulate the window navigating to `url`; the new document starts out parsing. */
+  navigate: (url: string) => Document
+  /** Finish parsing the document `navigate` created. */
+  finishLoading: () => void
+  /** Make the document throw on access, as after a cross-origin redirect. */
+  makeUnscriptable: () => void
 }
 
 function createFakePopup(): FakePopup {
-  const doc = document.implementation.createHTMLDocument('popup')
+  let doc = document.implementation.createHTMLDocument('popup')
   const listeners = new Map<string, Set<EventListener>>()
   let closed = false
+  let unscriptable = false
+  let finish = () => {}
 
   const win = {
     get document() {
+      if (unscriptable) {
+        throw new DOMException(
+          'Blocked a frame with origin "http://localhost" from accessing a cross-origin frame.',
+          'SecurityError',
+        )
+      }
       return doc
     },
     get closed() {
@@ -44,6 +59,23 @@ function createFakePopup(): FakePopup {
       for (const listener of listeners.get('pagehide') ?? []) {
         listener(new Event('pagehide'))
       }
+    },
+    navigate(url) {
+      const next = document.implementation.createHTMLDocument('popup')
+      let readyState: DocumentReadyState = 'loading'
+      Object.defineProperty(next, 'URL', { get: () => url })
+      Object.defineProperty(next, 'readyState', { get: () => readyState })
+      finish = () => {
+        readyState = 'complete'
+      }
+      doc = next
+      return next
+    },
+    finishLoading() {
+      finish()
+    },
+    makeUnscriptable() {
+      unscriptable = true
     },
   }
 }
@@ -185,6 +217,88 @@ describe('usePopupWindow', () => {
     expect(getApi().isOpen).toBe(false)
     expect(onBlocked).toHaveBeenCalledTimes(1)
     expect(closed).toBe(true)
+  })
+
+  it('renders into the page given by url once it has loaded', () => {
+    vi.useFakeTimers()
+    const onOpen = vi.fn()
+    const getApi = renderHarness({ url: '/popup.html', title: 'Loaded panel', onOpen })
+    act(() => {
+      getApi().open()
+    })
+    expect(window.open).toHaveBeenCalledWith('/popup.html', '_blank', expect.any(String))
+    expect(getApi().isOpen).toBe(true)
+    expect(getApi().popupWindow).toBe(fake.win)
+
+    // Still on the initial about:blank document: nothing is rendered yet.
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    expect(fake.doc.querySelector('[data-popup-window-root]')).toBeNull()
+    expect(onOpen).not.toHaveBeenCalled()
+
+    // The page has replaced it but is still parsing.
+    const page = fake.navigate('http://localhost/popup.html')
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    expect(page.querySelector('[data-popup-window-root]')).toBeNull()
+
+    fake.finishLoading()
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    expect(page.title).toBe('Loaded panel')
+    expect(page.body.textContent).toContain('hello from popup')
+    expect(onOpen).toHaveBeenCalledWith(fake.win)
+    vi.useRealTimers()
+  })
+
+  it('close() before the url page has loaded leaves nothing behind', () => {
+    vi.useFakeTimers()
+    const onOpen = vi.fn()
+    const onClose = vi.fn()
+    const getApi = renderHarness({ url: '/popup.html', onOpen, onClose })
+    act(() => {
+      getApi().open()
+    })
+    act(() => {
+      getApi().close()
+    })
+    expect(getApi().isOpen).toBe(false)
+    expect(fake.win.closed).toBe(true)
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    const page = fake.navigate('http://localhost/popup.html')
+    fake.finishLoading()
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    expect(page.querySelector('[data-popup-window-root]')).toBeNull()
+    expect(onOpen).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it('reports blocked when the url page ends up on another origin', () => {
+    vi.useFakeTimers()
+    const onBlocked = vi.fn()
+    const onClose = vi.fn()
+    const getApi = renderHarness({ url: '/popup.html', onBlocked, onClose })
+    act(() => {
+      getApi().open()
+    })
+    expect(getApi().isOpen).toBe(true)
+
+    fake.makeUnscriptable()
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    expect(getApi().isOpen).toBe(false)
+    expect(getApi().isBlocked).toBe(true)
+    expect(fake.win.closed).toBe(true)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onBlocked).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
   })
 
   it('closes the popup when the owning component unmounts', () => {

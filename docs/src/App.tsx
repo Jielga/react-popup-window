@@ -66,7 +66,10 @@ export function SameWindowPortals({ children }) {
 }`
 
 const PANELS_SNIPPET = `const resultsPanelRef = usePanelRef() // react-resizable-panels
-const { open, close, focus, isOpen, Popup } = usePopupWindow({ title: 'Search results' })
+const { open, close, focus, isOpen, Popup } = usePopupWindow({
+  title: 'Search results',
+  url: '/popup.html', // empty page served by the app; the address bar shows it instead of about:blank
+})
 
 // Collapse the results panel to a control strip while popped out;
 // expand again when the popup closes (button or the user closing it).
@@ -181,8 +184,9 @@ function AppInner() {
               panel holds the query form; the right panel holds a grid with 400 virtualized rows,
               sortable, resizable, reorderable and pinnable columns, column filters, row selection,
               and a drag-selectable cell range. Opening the results in a new window collapses the
-              panel to a control strip with focus and close actions. The filter state lives in the
-              main window, so editing filters updates the popped-out grid.
+              panel to a control strip with focus and close actions. The popup loads an empty page
+              from this site, so its address bar shows the site's URL instead of about:blank. The
+              filter state lives in the main window, so editing filters updates the popped-out grid.
             </p>
             <div className="demo">
               <PanelsExample />
@@ -282,7 +286,7 @@ function AppInner() {
             </tbody>
           </table>
           <p style={{ marginTop: '0.9rem' }}>
-            Options: <code>title</code>, <code>name</code>, <code>features</code> (width/height/…,
+            Options: <code>title</code>, <code>name</code>, <code>url</code>, <code>features</code> (width/height/…,
             default <code>{'{ popup: true, width: 640, height: 480 }'}</code>), <code>center</code>,{' '}
             <code>copyStyles</code>, <code>onOpen</code>, <code>onClose</code>,{' '}
             <code>onBlocked</code>. Full reference in the{' '}

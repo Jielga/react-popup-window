@@ -20,6 +20,14 @@ export interface UsePopupWindowOptions {
    * window. Defaults to `_blank` (a fresh window every time).
    */
   name?: string
+  /**
+   * URL the popup loads instead of `about:blank`: an empty page served on the
+   * same origin, such as `/popup.html`. The popup's address bar shows that
+   * URL. `isOpen` turns `true` at once; `Popup` renders once the page has
+   * loaded. If the page redirects to another origin, the popup closes and is
+   * reported through `onBlocked`. Defaults to `about:blank`.
+   */
+  url?: string
   /** Extra `window.open` features. Defaults to `{ popup: true, width: 640, height: 480 }` merged with what you pass. */
   features?: PopupWindowFeatures
   /**
@@ -40,7 +48,8 @@ export interface UsePopupWindowOptions {
   /**
    * Called when the popup cannot be used: `window.open` returned `null`
    * (blocked by the browser), or the popup's document is not scriptable
-   * because a sandboxed embedder gave it an opaque origin.
+   * because a sandboxed embedder gave it an opaque origin or `url` led to
+   * another origin.
    */
   onBlocked?: () => void
 }

@@ -111,6 +111,9 @@ test('panels: popped-out grid follows filters edited in the main window', async 
 
   const popup = await openPopup(page, 'open-results')
 
+  // The popup loads the site's empty popup.html instead of about:blank.
+  await expect(popup).toHaveURL(/\/react-popup-window\/popup\.html$/)
+
   // The right panel collapses to the control strip; the grid now lives in the popup.
   await expect(page.getByTestId('panel-strip')).toBeVisible()
   await expect(page.getByTestId('results-host')).toHaveCount(0)
