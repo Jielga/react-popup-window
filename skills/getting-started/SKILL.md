@@ -3,11 +3,11 @@ name: getting-started
 description: >
   Set up @jielga/react-popup-window: the usePopupWindow hook, the Popup portal
   component, window controls (open, close, toggle, focus), reactive state
-  (isOpen, isBlocked, popupWindow), and hook options (title, name, features,
-  center, copyStyles, onOpen, onClose, onBlocked). Load when opening part of a
-  React tree in a separate browser window, building an "open in new window" or
-  detachable panel, or when a popup is blocked, closes unexpectedly, or loses
-  state.
+  (isOpen, isBlocked, popupWindow), and hook options (title, name, url,
+  features, center, copyStyles, onOpen, onClose, onBlocked). Load when opening
+  part of a React tree in a separate browser window, building an "open in new
+  window" or detachable panel, or when a popup is blocked, closes unexpectedly,
+  loses state, or shows about:blank in its address bar.
 metadata:
   type: core
   library: '@jielga/react-popup-window'
@@ -21,9 +21,10 @@ sources:
 # react-popup-window — Getting started
 
 `usePopupWindow` opens part of a React tree in a separate browser window.
-Content is rendered with a portal into the popup's `about:blank` document,
-so it remains part of the calling component tree: state, context, and event
-handlers work across windows without bridging. The popup document runs no
+Content is rendered with a portal into the popup's document (`about:blank`,
+or the empty page set with `url`), so it remains part of the calling
+component tree: state, context, and event handlers work across windows
+without bridging. The popup document runs no
 JavaScript of its own; the opener's React instance renders into it.
 
 ## Setup
@@ -90,12 +91,29 @@ const { open, isBlocked } = usePopupWindow({ onBlocked: () => notifyUser() })
 // open() returns Window | null; null means blocked (or non-browser environment)
 ```
 
+### Show the app's URL in the address bar
+
+By default, the popup loads `about:blank`, and its address bar shows that.
+Set `url` to an empty page served on the same origin; the bar then shows it:
+
+```tsx
+// public/popup.html:
+// <!doctype html><html><head><meta charset="utf-8" /></head><body></body></html>
+const { open, Popup } = usePopupWindow({ title: 'Panel', url: '/popup.html' })
+```
+
+`isOpen` turns `true` as soon as the window opens; `Popup` renders once the
+page has loaded. Important: do not point `url` at a route of the app, as that
+starts a second copy of the app inside the popup. If the page redirects to
+another origin, the popup closes and `onBlocked` is called.
+
 ### Options
 
 ```ts
 interface UsePopupWindowOptions {
   title?: string        // popup document title; defaults to the opener's title
   name?: string         // window.open target name; same name reuses the window
+  url?: string          // same-origin empty page to load instead of about:blank
   features?: PopupWindowFeatures // merged over { popup: true, width: 640, height: 480 }
   center?: boolean      // center over the opener window; default true
   copyStyles?: boolean  // mirror and live-sync stylesheets; default true

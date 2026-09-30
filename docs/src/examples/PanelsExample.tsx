@@ -144,6 +144,9 @@ export function PanelsExample() {
 
   const { open, close, focus, isOpen, Popup } = usePopupWindow({
     title: 'Search results',
+    // An empty page served by this site, so the popup's address bar shows the
+    // site's URL instead of about:blank.
+    url: `${import.meta.env.BASE_URL}popup.html`,
     features: { width: 860, height: 560 },
   })
 

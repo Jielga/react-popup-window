@@ -26,9 +26,9 @@ sources:
 This skill builds on getting-started. Read it first for the portal model
 and hook API.
 
-The popup document starts as an unstyled `about:blank` page. While it is
-open, the library mirrors the opener's styling into it and keeps the mirror
-current:
+The popup document starts as an unstyled page: `about:blank`, or the empty
+page set with `url`. While it is open, the library mirrors the opener's
+styling into it and keeps the mirror current:
 
 - `<style>` and `<link rel="stylesheet">` elements are copied into the
   popup `<head>`. `<style>` contents are serialized from the CSSOM, so
