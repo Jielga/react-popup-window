@@ -15,6 +15,24 @@
  * Returns a function that stops observing.
  */
 export function copyStyles(source: Document, target: Document, watch = true): () => void {
+  return mirrorStyles(source, target, watch).stop
+}
+
+/** Attributes copied from a source `<link>` onto its mirror. */
+const LINK_ATTRS = ['rel', 'media', 'title', 'crossorigin', 'referrerpolicy', 'integrity']
+
+export interface StyleMirror {
+  /** Stops observing the source document. */
+  stop: () => void
+  /**
+   * The `<link>` elements created in `target` by the initial copy. The target
+   * fetches each of them asynchronously.
+   */
+  links: HTMLLinkElement[]
+}
+
+/** {@link copyStyles}, plus the `<link>` elements the initial copy created. */
+export function mirrorStyles(source: Document, target: Document, watch = true): StyleMirror {
   const mirrors = new Map<Element, Element>()
 
   const isStyleNode = (node: Node): node is HTMLStyleElement | HTMLLinkElement => {
@@ -45,12 +63,16 @@ export function copyStyles(source: Document, target: Document, watch = true): ()
     let clone: Element
     if (el.tagName === 'LINK') {
       const link = target.createElement('link')
-      link.rel = 'stylesheet'
+      // `rel` is copied as is, so an alternate stylesheet stays disabled.
+      // `crossorigin` and `referrerpolicy` make the popup send the same request
+      // as the opener, so it can reuse the cached response.
+      for (const name of LINK_ATTRS) {
+        const value = el.getAttribute(name)
+        if (value !== null) link.setAttribute(name, value)
+      }
       // .href resolves to an absolute URL, so relative hrefs keep working
       // from the popup's `about:blank` document.
       link.href = (el as HTMLLinkElement).href
-      const media = el.getAttribute('media')
-      if (media) link.media = media
       clone = link
     } else {
       const style = target.createElement('style')
@@ -122,11 +144,14 @@ export function copyStyles(source: Document, target: Document, watch = true): ()
   for (const el of source.querySelectorAll('style, link[rel~="stylesheet" i]')) {
     mirror(el as HTMLStyleElement | HTMLLinkElement)
   }
+  const links = Array.from(mirrors.values()).filter(
+    (clone): clone is HTMLLinkElement => clone.tagName === 'LINK',
+  )
   syncRootAttrs()
   syncAdoptedSheets()
 
   if (!watch || typeof MutationObserver === 'undefined') {
-    return () => {}
+    return { stop: () => {}, links }
   }
 
   const headObserver = new MutationObserver((records) => {
@@ -161,8 +186,11 @@ export function copyStyles(source: Document, target: Document, watch = true): ()
   rootObserver.observe(source.documentElement, { attributes: true })
   if (source.body) rootObserver.observe(source.body, { attributes: true })
 
-  return () => {
-    headObserver.disconnect()
-    rootObserver.disconnect()
+  return {
+    stop: () => {
+      headObserver.disconnect()
+      rootObserver.disconnect()
+    },
+    links,
   }
 }

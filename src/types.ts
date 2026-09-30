@@ -38,10 +38,16 @@ export interface UsePopupWindowOptions {
   /**
    * Copy the opener document's stylesheets into the popup and keep them in
    * sync (new/changed `<style>`/`<link>` tags, `class`/`style` attributes on
-   * `<html>`/`<body>`, adopted stylesheets). Defaults to `true`.
+   * `<html>`/`<body>`, adopted stylesheets). `Popup` renders once the copied
+   * `<link>` stylesheets have loaded, or after 3 seconds, so the first frame
+   * shown is styled. Defaults to `true`.
    */
   copyStyles?: boolean
-  /** Called after the popup window has been opened and prepared. */
+  /**
+   * Called when `Popup` starts rendering into the popup: once the window has
+   * opened, the `url` page has loaded, and copied `<link>` stylesheets have
+   * loaded.
+   */
   onOpen?: (popupWindow: Window) => void
   /** Called when the popup closes — via `close()`, the user, or the opener unloading. */
   onClose?: () => void

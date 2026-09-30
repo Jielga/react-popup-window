@@ -1,3 +1,6 @@
+import { createServer } from 'node:http'
+import type { Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { generatePeople } from '../docs/src/examples/people'
@@ -186,4 +189,102 @@ test('dark mode toggled in the main window propagates to the popup', async ({ pa
 
   const bg = await popup.evaluate(() => getComputedStyle(document.body).backgroundColor)
   expect(bg).toBe('rgb(20, 24, 31)') // --bg in dark mode
+})
+
+interface FirstContentFrame {
+  /** Stylesheets of the popup that had not loaded when the frame was painted. */
+  pendingStylesheets: string[]
+}
+
+type ProbedWindow = Window & { __firstContentFrame?: FirstContentFrame }
+
+/**
+ * Records, in the opener, which stylesheets of the next popup had not loaded
+ * yet in the first frame that shows popup content. `requestAnimationFrame`
+ * callbacks run right before a frame is painted.
+ */
+async function probeFirstContentFrame(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const probed = window as ProbedWindow
+    const open = window.open.bind(window)
+    window.open = (...args) => {
+      const popup = open(...args)
+      if (!popup) return popup
+      const probe = () => {
+        if (popup.closed || probed.__firstContentFrame) return
+        const doc = popup.document
+        if (doc.querySelector('[data-popup-window-root]')?.childElementCount) {
+          probed.__firstContentFrame = {
+            pendingStylesheets: Array.from(
+              doc.querySelectorAll<HTMLLinkElement>('link[rel~="stylesheet"]'),
+            )
+              .filter((link) => link.sheet === null)
+              .map((link) => link.href),
+          }
+          return
+        }
+        popup.requestAnimationFrame(probe)
+      }
+      // Loading `url` replaces the document and drops its pending frame
+      // callbacks, so keep requesting new ones.
+      const rearm = window.setInterval(() => {
+        if (popup.closed || probed.__firstContentFrame) window.clearInterval(rearm)
+        else popup.requestAnimationFrame(probe)
+      }, 5)
+      probe()
+      return popup
+    }
+  })
+}
+
+test.describe('first popup paint', () => {
+  // Vite dev injects CSS as <style>. Production builds use <link>, which the
+  // popup loads again after it opens. Serve a slow one to cover that path.
+  // Playwright's request routing cannot be used for it: it stalls requests
+  // from a scripted about:blank popup.
+  let server: Server
+  let slowCssUrl: string
+
+  test.beforeAll(async () => {
+    server = createServer((_req, res) => {
+      setTimeout(() => {
+        res.writeHead(200, { 'content-type': 'text/css', 'cache-control': 'no-store' })
+        res.end('[data-popup-window-root] { outline: 3px solid rgb(255, 0, 0); }')
+      }, 300)
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    slowCssUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/slow.css`
+  })
+
+  test.afterAll(async () => {
+    await new Promise((resolve) => server.close(resolve))
+  })
+
+  for (const openTestId of ['open-counter', 'open-results']) {
+    test(`${openTestId}: linked stylesheets are applied`, async ({ page }) => {
+      await page.evaluate(
+        (href) =>
+          new Promise((resolve) => {
+            const link = document.createElement('link')
+            link.rel = 'stylesheet'
+            link.href = href
+            link.addEventListener('load', resolve)
+            document.head.appendChild(link)
+          }),
+        slowCssUrl,
+      )
+      await probeFirstContentFrame(page)
+
+      const popup = await openPopup(page, openTestId)
+
+      const frame = await page
+        .waitForFunction(() => (window as ProbedWindow).__firstContentFrame ?? null)
+        .then((handle) => handle.jsonValue())
+      expect(frame?.pendingStylesheets).toEqual([])
+      await expect(popup.locator('[data-popup-window-root]')).toHaveCSS(
+        'outline-color',
+        'rgb(255, 0, 0)',
+      )
+    })
+  }
 })

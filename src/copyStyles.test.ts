@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { copyStyles } from './copyStyles'
+import { copyStyles, mirrorStyles } from './copyStyles'
 
 const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -41,6 +41,45 @@ describe('copyStyles', () => {
     expect(copied.getAttribute('href')).toMatch(/^https?:\/\/.+\/styles\/app\.css$/)
 
     stop()
+    link.remove()
+  })
+
+  it('copies the attributes that shape the <link> request and whether it applies', () => {
+    const link = document.createElement('link')
+    link.rel = 'alternate stylesheet'
+    link.title = 'High contrast'
+    link.href = '/styles/contrast.css'
+    link.media = 'screen'
+    link.setAttribute('crossorigin', '')
+    link.setAttribute('referrerpolicy', 'no-referrer')
+    document.head.appendChild(link)
+    const target = createTarget()
+    const stop = copyStyles(document, target, false)
+
+    const copied = target.head.querySelector('link') as HTMLLinkElement
+    expect(copied.rel).toBe('alternate stylesheet')
+    expect(copied.title).toBe('High contrast')
+    expect(copied.media).toBe('screen')
+    expect(copied.getAttribute('crossorigin')).toBe('')
+    expect(copied.getAttribute('referrerpolicy')).toBe('no-referrer')
+
+    stop()
+    link.remove()
+  })
+
+  it('mirrorStyles returns the <link> elements it created', () => {
+    const style = addStyle('.a { color: red; }')
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = '/styles/app.css'
+    document.head.appendChild(link)
+    const target = createTarget()
+    const { stop, links } = mirrorStyles(document, target, false)
+
+    expect(links).toEqual([target.head.querySelector('link')])
+
+    stop()
+    style.remove()
     link.remove()
   })
 
