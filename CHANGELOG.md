@@ -1,5 +1,21 @@
 # @jielga/react-popup-window
 
+## 0.2.0
+
+### Minor Changes
+
+- [`cf5ad79`](https://github.com/Jielga/react-popup-window/commit/cf5ad79f54627c708d47fe0525b305fe3787e2bc) Thanks [@Psvensso](https://github.com/Psvensso)! - Add the `url` option: a same-origin page the popup loads instead of `about:blank`, so the address bar shows the app's own URL.
+  `isOpen` turns `true` when the window opens; `Popup` renders once the page has loaded.
+  If the page ends up on another origin, the popup closes and is reported through `onBlocked`.
+
+### Patch Changes
+
+- [`0173441`](https://github.com/Jielga/react-popup-window/commit/0173441f3b7bf3f97a7ce22d983e37140ae92c9a) Thanks [@Psvensso](https://github.com/Psvensso)! - Show popup content only once its copied stylesheets have loaded.
+  The popup loads each `<link rel="stylesheet">` from the opener again, and `Popup` used to render before that finished, so the first frame showed unstyled content (every time in production builds, where the CSS is a `<link>`).
+  `Popup` now renders once those stylesheets have loaded or failed, or after 3 seconds.
+  `isOpen` still turns `true` when the window opens; `onOpen` is now called when `Popup` starts rendering, which can be after `open()` returns.
+  Copied `<link>` elements now keep `rel`, `title`, `crossorigin`, `referrerpolicy`, and `integrity`, so an alternate stylesheet stays disabled in the popup and the popup sends the same request as the opener.
+
 ## 0.1.1
 
 ### Patch Changes
