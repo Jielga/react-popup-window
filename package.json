@@ -56,7 +56,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "skills:validate": "node node_modules/@tanstack/intent/dist/cli.mjs validate",
     "changeset": "changeset",
-    "version-packages": "changeset version && node scripts/sync-skill-version.mjs",
+    "version-packages": "changeset version && npm install --package-lock-only --no-audit --no-fund && node scripts/sync-skill-version.mjs",
     "release": "changeset publish",
     "prepublishOnly": "npm run build"
   },
