@@ -32,7 +32,12 @@ styling into it and keeps the mirror current:
 
 - `<style>` and `<link rel="stylesheet">` elements are copied into the
   popup `<head>`. `<style>` contents are serialized from the CSSOM, so
-  rules injected with `insertRule` (CSS-in-JS) are included at copy time.
+  rules injected with `insertRule` are included.
+- Rules added to or removed from a `<style>` sheet later with `insertRule`
+  and `deleteRule` are applied to the popup's copy as they happen. Emotion
+  (including MUI and `@mantine/emotion`) and styled-components add rules
+  this way in production builds, often while popup content renders for the
+  first time.
 - Additions, removals, and edits of style nodes in the opener's `<head>`
   are observed and re-mirrored. This covers Vite HMR and lazily loaded
   chunk CSS.
@@ -401,28 +406,28 @@ message — require listeners on the `popupWindow` object.
 
 Source: README.md (Communication)
 
-### MEDIUM Expecting CSSOM-only rule changes to sync after open
+### MEDIUM Expecting in-place CSSOM edits to sync after open
 
 Wrong:
 
 ```tsx
 // after the popup is open
-someStyleSheet.insertRule('.late { color: red }') // no DOM mutation; not observed
+rule.style.setProperty('color', 'red') // edits an existing rule; not mirrored
+mediaRule.insertRule('.late { color: red }') // nested rule; not mirrored
 ```
 
 Correct:
 
 ```tsx
-// inject a new <style> element instead; node additions are observed
-const el = document.createElement('style')
-el.textContent = '.late { color: red }'
-document.head.appendChild(el)
+// add a rule to the <style> sheet itself; insertRule on the sheet is mirrored
+const sheet = styleElement.sheet!
+sheet.insertRule('.late { color: red }', sheet.cssRules.length)
 ```
 
-Style synchronization serializes each sheet when it is copied and re-reads
-it when its DOM node changes. A rule inserted directly into an existing
-sheet's CSSOM after the popup opened produces no mutation and is not
-re-mirrored. Most CSS-in-JS libraries create or update style elements and
-are unaffected.
+Style synchronization copies each sheet when the popup opens, applies
+`insertRule`/`deleteRule` calls on a `<style>` sheet as they happen, and
+copies a sheet again when its node changes. Edits inside an existing rule,
+rules inserted into a nested rule such as `@media`, and changes to
+`document.adoptedStyleSheets` after the popup opened are not mirrored.
 
 Source: src/copyStyles.ts

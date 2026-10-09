@@ -4,10 +4,14 @@
  *
  * - `<link rel="stylesheet">` and `<style>` elements are mirrored into the
  *   target `<head>`. `<style>` contents are serialized from the CSSOM when
- *   possible, so rules injected via `insertRule` (CSS-in-JS "speedy" mode)
- *   are included.
+ *   possible, so rules injected via `insertRule` are included.
+ * - Rules added to or removed from a `<style>` sheet later with
+ *   `insertRule`/`deleteRule` are applied to its mirror as they happen. This
+ *   is how CSS-in-JS libraries (Emotion, styled-components) add rules in
+ *   production builds, and it changes no DOM.
  * - Additions/removals/edits of style nodes in the source `<head>` are
- *   observed (covers Vite HMR, lazily loaded chunk CSS, styled-components).
+ *   observed (covers Vite HMR, lazily loaded chunk CSS, CSS-in-JS in
+ *   development builds).
  * - `class`/`style`/`data-*` attributes on `<html>` and `<body>` are mirrored
  *   and kept in sync, so theme switching (e.g. a `dark` class) propagates.
  * - `document.adoptedStyleSheets` are re-constructed in the target document.
@@ -16,6 +20,46 @@
  */
 export function copyStyles(source: Document, target: Document, watch = true): () => void {
   return mirrorStyles(source, target, watch).stop
+}
+
+type RuleChange = { type: 'insert'; rule: string; index: number } | { type: 'delete'; index: number }
+type RuleListener = (change: RuleChange) => void
+
+const ruleListeners = new WeakMap<CSSStyleSheet, Set<RuleListener>>()
+
+/**
+ * Calls `listener` after each `insertRule`/`deleteRule` call on `sheet`.
+ * Wraps the two methods on this sheet object only, not on the prototype, and
+ * restores them once the sheet's last listener is removed. Returns a function
+ * that removes the listener.
+ */
+function onRuleChange(sheet: CSSStyleSheet, listener: RuleListener): () => void {
+  let listeners = ruleListeners.get(sheet)
+  if (!listeners) {
+    const all = new Set<RuleListener>()
+    listeners = all
+    ruleListeners.set(sheet, all)
+    const proto = Object.getPrototypeOf(sheet) as CSSStyleSheet
+    sheet.insertRule = function (this: CSSStyleSheet, rule: string, index?: number): number {
+      const inserted = proto.insertRule.call(this, rule, index)
+      for (const notify of [...all]) notify({ type: 'insert', rule, index: inserted })
+      return inserted
+    }
+    sheet.deleteRule = function (this: CSSStyleSheet, index: number): void {
+      proto.deleteRule.call(this, index)
+      for (const notify of [...all]) notify({ type: 'delete', index })
+    }
+  }
+  const own = listeners
+  own.add(listener)
+  return () => {
+    own.delete(listener)
+    if (own.size > 0) return
+    ruleListeners.delete(sheet)
+    const wrapped = sheet as { insertRule?: unknown; deleteRule?: unknown }
+    delete wrapped.insertRule
+    delete wrapped.deleteRule
+  }
 }
 
 /** Attributes copied from a source `<link>` onto its mirror. */
@@ -34,6 +78,7 @@ export interface StyleMirror {
 /** {@link copyStyles}, plus the `<link>` elements the initial copy created. */
 export function mirrorStyles(source: Document, target: Document, watch = true): StyleMirror {
   const mirrors = new Map<Element, Element>()
+  const observing = watch && typeof MutationObserver !== 'undefined'
 
   const isStyleNode = (node: Node): node is HTMLStyleElement | HTMLLinkElement => {
     if (node.nodeType !== Node.ELEMENT_NODE) return false
@@ -56,6 +101,56 @@ export function mirrorStyles(source: Document, target: Document, watch = true): 
       }
     }
     return el.textContent ?? ''
+  }
+
+  interface RuleSync {
+    sheet: CSSStyleSheet
+    /** Rule count of `sheet` that the mirror reflects. */
+    count: number
+    stop: () => void
+  }
+  const ruleSyncs = new Map<HTMLStyleElement, RuleSync>()
+
+  // CSS-in-JS libraries in production builds add rules with insertRule, which
+  // changes no DOM. Apply each change to the mirror as it happens, so content
+  // that renders in the same task, such as the popup's first render, is
+  // already styled.
+  const syncRules = (el: HTMLStyleElement, clone: HTMLStyleElement): void => {
+    const sheet = el.sheet
+    const current = ruleSyncs.get(el)
+    if (current && current.sheet === sheet) {
+      current.count = sheet.cssRules.length
+      return
+    }
+    current?.stop()
+    ruleSyncs.delete(el)
+    if (!observing || !sheet) return
+    const sync: RuleSync = {
+      sheet,
+      count: sheet.cssRules.length,
+      stop: onRuleChange(sheet, (change) => {
+        const copy = clone.sheet
+        try {
+          if (copy) {
+            if (change.type === 'insert') copy.insertRule(change.rule, change.index)
+            else copy.deleteRule(change.index)
+            if (copy.cssRules.length === sheet.cssRules.length) {
+              sync.count = sheet.cssRules.length
+              return
+            }
+          }
+        } catch {
+          // Out of step with the source - copy the whole sheet again below.
+        }
+        refresh(el)
+      }),
+    }
+    ruleSyncs.set(el, sync)
+  }
+
+  const unsyncRules = (el: Element): void => {
+    ruleSyncs.get(el as HTMLStyleElement)?.stop()
+    ruleSyncs.delete(el as HTMLStyleElement)
   }
 
   const mirror = (el: HTMLStyleElement | HTMLLinkElement): void => {
@@ -83,11 +178,15 @@ export function mirrorStyles(source: Document, target: Document, watch = true): 
     }
     target.head.appendChild(clone)
     mirrors.set(el, clone)
+    if (el.tagName === 'STYLE') syncRules(el as HTMLStyleElement, clone as HTMLStyleElement)
   }
 
   const refresh = (el: HTMLStyleElement): void => {
     const clone = mirrors.get(el)
-    if (clone) clone.textContent = serializeStyle(el)
+    if (!clone) return
+    clone.textContent = serializeStyle(el)
+    // New text gives the source a new sheet object.
+    syncRules(el, clone as HTMLStyleElement)
   }
 
   const unmirrorSubtree = (removed: Node): void => {
@@ -95,6 +194,7 @@ export function mirrorStyles(source: Document, target: Document, watch = true): 
       if (removed === src || (removed.nodeType === Node.ELEMENT_NODE && removed.contains(src))) {
         clone.remove()
         mirrors.delete(src)
+        unsyncRules(src)
       }
     }
   }
@@ -150,7 +250,7 @@ export function mirrorStyles(source: Document, target: Document, watch = true): 
   syncRootAttrs()
   syncAdoptedSheets()
 
-  if (!watch || typeof MutationObserver === 'undefined') {
+  if (!observing) {
     return { stop: () => {}, links }
   }
 
@@ -186,10 +286,28 @@ export function mirrorStyles(source: Document, target: Document, watch = true): 
   rootObserver.observe(source.documentElement, { attributes: true })
   if (source.body) rootObserver.observe(source.body, { attributes: true })
 
+  // Fallback for rule changes that bypass the sheet's own methods, such as
+  // CSSStyleSheet.prototype.insertRule.call(sheet, ...): once per frame of the
+  // target window, copy again any sheet whose rule count changed.
+  const view = target.defaultView
+  let frame: number | undefined
+  const checkRuleCounts = (): void => {
+    for (const [el, sync] of ruleSyncs) {
+      if (el.sheet === sync.sheet && sync.sheet.cssRules.length !== sync.count) refresh(el)
+    }
+    frame = view?.requestAnimationFrame(checkRuleCounts)
+  }
+  if (view && typeof view.requestAnimationFrame === 'function') {
+    frame = view.requestAnimationFrame(checkRuleCounts)
+  }
+
   return {
     stop: () => {
       headObserver.disconnect()
       rootObserver.disconnect()
+      if (frame !== undefined) view?.cancelAnimationFrame(frame)
+      for (const sync of ruleSyncs.values()) sync.stop()
+      ruleSyncs.clear()
     },
     links,
   }

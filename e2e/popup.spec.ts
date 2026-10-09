@@ -191,6 +191,32 @@ test('dark mode toggled in the main window propagates to the popup', async ({ pa
   expect(bg).toBe('rgb(20, 24, 31)') // --bg in dark mode
 })
 
+test('rules inserted into an opener <style> after opening apply in the popup at once', async ({
+  page,
+}) => {
+  // CSS-in-JS libraries in production builds keep one <style> per app and
+  // add each component's rules with insertRule the first time it renders.
+  await page.evaluate(() => {
+    const style = document.createElement('style')
+    style.id = 'css-in-js'
+    style.textContent = '.unused {}'
+    document.head.appendChild(style)
+  })
+  const popup = await openPopup(page, 'open-counter')
+
+  // Inserted and read in one synchronous call: no frame passes in between.
+  const outline = await popup.getByTestId('popup-count').evaluate((el) => {
+    const sheet = (window.opener as Window).document.querySelector<HTMLStyleElement>('#css-in-js')!
+      .sheet!
+    sheet.insertRule(
+      '[data-testid="popup-count"] { outline: 3px solid rgb(255, 0, 0) }',
+      sheet.cssRules.length,
+    )
+    return getComputedStyle(el).outlineColor
+  })
+  expect(outline).toBe('rgb(255, 0, 0)')
+})
+
 interface FirstContentFrame {
   /** Stylesheets of the popup that had not loaded when the frame was painted. */
   pendingStylesheets: string[]

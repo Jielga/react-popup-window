@@ -185,8 +185,13 @@ document and kept current:
 - `<style>` and `<link rel="stylesheet">` elements. `<style>` contents are
   serialized from the CSSOM, so rules injected with `insertRule` are
   included.
+- Rules added to or removed from a `<style>` sheet with `insertRule` and
+  `deleteRule`, applied to the popup as they happen. CSS-in-JS libraries
+  such as Emotion and styled-components add rules this way in production
+  builds.
 - Additions, removals, and text edits of style nodes in `<head>`. This
-  covers Vite HMR, lazily loaded chunk CSS, and CSS-in-JS libraries.
+  covers Vite HMR, lazily loaded chunk CSS, and CSS-in-JS libraries in
+  development builds.
 - `class`, `style`, and `data-*` attributes on `<html>` and `<body>`.
   Theme systems keyed on root attributes propagate to the popup.
 - `document.adoptedStyleSheets`.
@@ -196,6 +201,7 @@ The popup loads each copied `<link>` stylesheet again.
 Alternate stylesheets and stylesheets whose `media` does not match are not waited for.
 If a stylesheet takes longer than 3 seconds, `Popup` renders without it.
 Note that a `<link>` added to the opener while the popup is open loads in the popup after the content is shown.
+Edits inside an existing rule, rules inserted into a nested rule such as `@media`, and changes to `document.adoptedStyleSheets` after the popup opened are not mirrored.
 
 Set `copyStyles: false` to disable.
 

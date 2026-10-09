@@ -14,6 +14,28 @@ function addStyle(css: string): HTMLStyleElement {
   return style
 }
 
+/**
+ * The document of an iframe: unlike `createHTMLDocument`, jsdom gives it a
+ * CSSOM and `requestAnimationFrame`, as a popup window has.
+ */
+function createWindowTarget(): { target: Document; nextFrame: () => Promise<void>; remove: () => void } {
+  const iframe = document.createElement('iframe')
+  document.body.appendChild(iframe)
+  const view = iframe.contentWindow!
+  return {
+    target: iframe.contentDocument!,
+    nextFrame: () => new Promise((resolve) => view.requestAnimationFrame(() => resolve())),
+    remove: () => iframe.remove(),
+  }
+}
+
+/** Rules of every <style> in `target`, read from the CSSOM. */
+function mirroredRules(target: Document): string[] {
+  return Array.from(target.head.querySelectorAll('style')).flatMap((el) =>
+    Array.from(el.sheet?.cssRules ?? []).map((rule) => rule.cssText),
+  )
+}
+
 describe('copyStyles', () => {
   it('copies existing <style> elements into the target head', () => {
     const style = addStyle('.a { color: red; }')
@@ -121,6 +143,68 @@ describe('copyStyles', () => {
 
     stop()
     style.remove()
+  })
+
+  // CSS-in-JS libraries add rules this way in production builds. The rules
+  // must reach the mirror in the same task, before the content that uses
+  // them renders.
+  it('applies insertRule and deleteRule on a <style> sheet to the mirror at once', () => {
+    const style = addStyle('.a { color: red; }')
+    const { target, remove } = createWindowTarget()
+    const stop = copyStyles(document, target)
+
+    style.sheet!.insertRule('.b { color: blue; }', 1)
+    expect(mirroredRules(target)).toEqual(
+      expect.arrayContaining(['.a { color: red; }', '.b { color: blue; }']),
+    )
+
+    style.sheet!.deleteRule(0)
+    expect(mirroredRules(target)).not.toContain('.a { color: red; }')
+    expect(mirroredRules(target)).toContain('.b { color: blue; }')
+
+    stop()
+    style.remove()
+    remove()
+  })
+
+  it('forwards rules to every mirror and restores the sheet methods after the last stop', () => {
+    const style = addStyle('.a { color: red; }')
+    const sheet = style.sheet!
+    const first = createWindowTarget()
+    const second = createWindowTarget()
+    const stopFirst = copyStyles(document, first.target)
+    const stopSecond = copyStyles(document, second.target)
+
+    sheet.insertRule('.b { color: blue; }', 1)
+    expect(mirroredRules(first.target)).toContain('.b { color: blue; }')
+    expect(mirroredRules(second.target)).toContain('.b { color: blue; }')
+
+    stopFirst()
+    sheet.insertRule('.c { color: green; }', 2)
+    expect(mirroredRules(first.target)).not.toContain('.c { color: green; }')
+    expect(mirroredRules(second.target)).toContain('.c { color: green; }')
+
+    stopSecond()
+    expect(Object.hasOwn(sheet, 'insertRule')).toBe(false)
+    expect(Object.hasOwn(sheet, 'deleteRule')).toBe(false)
+    style.remove()
+    first.remove()
+    second.remove()
+  })
+
+  it('copies a sheet again on the next frame when its rules change without its own methods', async () => {
+    const style = addStyle('.a { color: red; }')
+    const { target, nextFrame, remove } = createWindowTarget()
+    const stop = copyStyles(document, target)
+
+    CSSStyleSheet.prototype.insertRule.call(style.sheet!, '.b { color: blue; }', 1)
+    expect(mirroredRules(target)).not.toContain('.b { color: blue; }')
+    await nextFrame()
+    expect(mirroredRules(target)).toContain('.b { color: blue; }')
+
+    stop()
+    style.remove()
+    remove()
   })
 
   it('mirrors class attributes on <html> and <body>', async () => {
