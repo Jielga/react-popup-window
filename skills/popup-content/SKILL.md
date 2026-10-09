@@ -12,7 +12,7 @@ description: >
 metadata:
   type: sub-skill
   library: '@jielga/react-popup-window'
-  library_version: '0.2.0'
+  library_version: '0.2.1'
 requires:
   - '@jielga/react-popup-window/getting-started'
 sources:
