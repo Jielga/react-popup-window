@@ -225,6 +225,64 @@ test('rules inserted into an opener <style> after opening apply in the popup at 
   expect(outline).toBe('rgb(255, 0, 0)')
 })
 
+test('a <link> added while the popup is open applies before the popup has loaded it', async ({
+  page,
+}) => {
+  // Lazily loaded chunk CSS: the bundler adds a <link> to the opener and
+  // renders the content once the opener has loaded it. The server answers
+  // the opener at once and the popup's own copy after 1 s. It tells them
+  // apart by the Referer: the `url` popup's page is popup.html. Playwright's
+  // request routing cannot be used: it stalls requests from the popup.
+  const server = createServer((req, res) => {
+    const fromPopup = req.headers.referer?.endsWith('/popup.html') ?? false
+    setTimeout(
+      () => {
+        res.writeHead(200, {
+          'content-type': 'text/css',
+          'cache-control': 'no-store',
+          'access-control-allow-origin': '*',
+        })
+        res.end('[data-popup-window-root] { outline: 3px solid rgb(255, 0, 0); }')
+      },
+      fromPopup ? 1000 : 0,
+    )
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const href = `http://127.0.0.1:${(server.address() as AddressInfo).port}/chunk.css`
+    const popup = await openPopup(page, 'open-results')
+    const root = popup.locator('[data-popup-window-root]')
+    await expect(root.locator('> *').first()).toBeAttached()
+    const adoptedBefore = await popup.evaluate(() => document.adoptedStyleSheets.length)
+
+    await page.evaluate(
+      (href) =>
+        new Promise((resolve) => {
+          const link = document.createElement('link')
+          link.rel = 'stylesheet'
+          link.crossOrigin = 'anonymous'
+          link.referrerPolicy = 'unsafe-url'
+          link.href = href
+          // The content renders in a later task than the load event.
+          link.addEventListener('load', () => setTimeout(resolve, 0))
+          document.head.appendChild(link)
+        }),
+      href,
+    )
+    const outline = () => root.evaluate((el) => getComputedStyle(el).outlineColor)
+    expect(await outline()).toBe('rgb(255, 0, 0)')
+
+    // Once the popup's own copy has loaded, the temporary sheet is removed.
+    await expect
+      .poll(() => popup.evaluate(() => document.adoptedStyleSheets.length))
+      .toBe(adoptedBefore)
+    expect(await outline()).toBe('rgb(255, 0, 0)')
+  } finally {
+    server.closeAllConnections()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
 interface FirstContentFrame {
   /** Stylesheets of the popup that had not loaded when the frame was painted. */
   pendingStylesheets: string[]
@@ -291,6 +349,7 @@ test.describe('first popup paint', () => {
   })
 
   test.afterAll(async () => {
+    server.closeAllConnections()
     await new Promise((resolve) => server.close(resolve))
   })
 

@@ -12,6 +12,9 @@
  * - Additions/removals/edits of style nodes in the source `<head>` are
  *   observed (covers Vite HMR, lazily loaded chunk CSS, CSS-in-JS in
  *   development builds).
+ * - A `<link>` added while watching is loaded by the target again. Until
+ *   that copy has loaded, the rules the source already loaded are applied
+ *   to the target through a constructed stylesheet.
  * - `class`/`style`/`data-*` attributes on `<html>` and `<body>` are mirrored
  *   and kept in sync, so theme switching (e.g. a `dark` class) propagates.
  * - `document.adoptedStyleSheets` are re-constructed in the target document.
@@ -153,6 +156,56 @@ export function mirrorStyles(source: Document, target: Document, watch = true): 
     ruleSyncs.delete(el as HTMLStyleElement)
   }
 
+  // A <link> added while watching, such as lazily loaded chunk CSS: the
+  // target loads its copy separately, and content that waits only for the
+  // source's copy, as bundlers do, can render before the target's has
+  // loaded. Until it has, apply the rules the source already parsed through a
+  // constructed sheet. `baseURL` keeps relative url()s resolving against the
+  // stylesheet. Adopted sheets come last in the cascade, which can change
+  // precedence for that short time. Unreadable cross-origin sheets are left
+  // to load normally.
+  const unbridgeLinks = new Map<Element, () => void>()
+  const bridgeLink = (el: HTMLLinkElement, clone: HTMLLinkElement): void => {
+    const view = target.defaultView as (Window & typeof globalThis) | null
+    if (!view || typeof view.CSSStyleSheet !== 'function' || !('adoptedStyleSheets' in target)) {
+      return
+    }
+    if (/\balternate\b/i.test(el.rel)) return
+    let bridge: CSSStyleSheet | null = null
+    const add = (): void => {
+      if (clone.sheet !== null || !el.sheet) return
+      try {
+        const text = Array.from(el.sheet.cssRules)
+          .map((rule) => rule.cssText)
+          .join('\n')
+        const sheet = new view.CSSStyleSheet({ baseURL: el.href, media: el.media || undefined })
+        sheet.replaceSync(text)
+        target.adoptedStyleSheets = [...target.adoptedStyleSheets, sheet]
+        bridge = sheet
+      } catch {
+        // Cross-origin rules or no constructable stylesheets - wait for the copy.
+      }
+    }
+    const remove = (): void => {
+      el.removeEventListener('load', add)
+      clone.removeEventListener('load', remove)
+      clone.removeEventListener('error', remove)
+      unbridgeLinks.delete(el)
+      const sheet = bridge
+      if (sheet) target.adoptedStyleSheets = target.adoptedStyleSheets.filter((s) => s !== sheet)
+      bridge = null
+    }
+    clone.addEventListener('load', remove)
+    clone.addEventListener('error', remove)
+    unbridgeLinks.set(el, remove)
+    if (el.sheet) add()
+    else el.addEventListener('load', add)
+  }
+
+  // True during the initial copy. `usePopupWindow` waits for those links
+  // itself before rendering.
+  let copying = true
+
   const mirror = (el: HTMLStyleElement | HTMLLinkElement): void => {
     if (mirrors.has(el)) return
     let clone: Element
@@ -179,6 +232,7 @@ export function mirrorStyles(source: Document, target: Document, watch = true): 
     target.head.appendChild(clone)
     mirrors.set(el, clone)
     if (el.tagName === 'STYLE') syncRules(el as HTMLStyleElement, clone as HTMLStyleElement)
+    else if (!copying && observing) bridgeLink(el as HTMLLinkElement, clone as HTMLLinkElement)
   }
 
   const refresh = (el: HTMLStyleElement): void => {
@@ -195,6 +249,7 @@ export function mirrorStyles(source: Document, target: Document, watch = true): 
         clone.remove()
         mirrors.delete(src)
         unsyncRules(src)
+        unbridgeLinks.get(src)?.()
       }
     }
   }
@@ -244,6 +299,7 @@ export function mirrorStyles(source: Document, target: Document, watch = true): 
   for (const el of source.querySelectorAll('style, link[rel~="stylesheet" i]')) {
     mirror(el as HTMLStyleElement | HTMLLinkElement)
   }
+  copying = false
   const links = Array.from(mirrors.values()).filter(
     (clone): clone is HTMLLinkElement => clone.tagName === 'LINK',
   )
@@ -307,6 +363,7 @@ export function mirrorStyles(source: Document, target: Document, watch = true): 
       rootObserver.disconnect()
       if (frame !== undefined) view?.cancelAnimationFrame(frame)
       for (const sync of ruleSyncs.values()) sync.stop()
+      for (const remove of [...unbridgeLinks.values()]) remove()
       ruleSyncs.clear()
     },
     links,

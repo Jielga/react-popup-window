@@ -203,7 +203,9 @@ The popup loads each copied `<link>` stylesheet again.
 `Popup` renders once they have loaded or failed, so the first frame shown is styled.
 Alternate stylesheets and stylesheets whose `media` does not match are not waited for.
 If a stylesheet takes longer than 3 seconds, `Popup` renders without it.
-Note that a `<link>` added to the opener while the popup is open loads in the popup after the content is shown.
+A `<link>` added to the opener while the popup is open, such as lazily loaded chunk CSS, is loaded by the popup again.
+Until that copy has loaded, the popup applies the rules the opener already loaded, so content rendered after the opener's load is styled.
+Note that a cross-origin stylesheet served without CORS cannot be read that way, and its content is unstyled until the popup has loaded it.
 Edits inside an existing rule, rules inserted into a nested rule such as `@media`, and changes to `document.adoptedStyleSheets` after the popup opened are not mirrored.
 
 Set `copyStyles: false` to disable.

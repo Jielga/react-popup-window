@@ -50,8 +50,10 @@ styling into it and keeps the mirror current:
 The popup loads each copied `<link>` stylesheet again. `Popup` renders once
 they have loaded or failed (at most 3 seconds), so the first frame shown is
 styled. Alternate stylesheets and non-matching `media` are not waited for.
-A `<link>` added to the opener while the popup is open loads in the popup
-after the content is shown.
+A `<link>` added to the opener while the popup is open, such as lazily loaded
+chunk CSS, is loaded by the popup again; until then the popup applies the
+rules the opener already loaded. A cross-origin stylesheet without CORS
+cannot be read that way and is unstyled until the popup has loaded it.
 
 `copyStyles: false` disables all of it. The mechanism is also exported
 standalone as `copyStyles(source, target, watch?)`, returning a `stop`
