@@ -64,6 +64,18 @@ const LOAD_POLL_MS = 20
 const STYLES_TIMEOUT_MS = 3000
 
 /**
+ * Gives the initial `about:blank` document an HTML5 doctype, so the popup
+ * lays out in standards mode like the opener instead of in quirks mode. Only
+ * the parser can set the mode, so the document is written again. In Chromium
+ * its `URL` then reports the opener's URL; a reload still loads `about:blank`.
+ */
+function writeStandardsDocument(doc: Document): void {
+  doc.open()
+  doc.write('<!DOCTYPE html><html><head></head><body></body></html>')
+  doc.close()
+}
+
+/**
  * The popup's document once the page given by `url` has replaced the initial
  * `about:blank` document and finished parsing, otherwise `null`. Throws when
  * the document is not scriptable.
@@ -222,6 +234,9 @@ export function usePopupWindow(options: UsePopupWindowOptions = {}): PopupWindow
     store.setState({ popupWindow, container: null, blocked: false })
 
     if (url === ABOUT_BLANK) {
+      // Before prepare(): writing the document removes event listeners on the
+      // popup window.
+      writeStandardsDocument(initialDoc)
       prepare(initialDoc)
     } else {
       // The window starts on an initial about:blank document and then

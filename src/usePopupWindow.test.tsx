@@ -131,6 +131,16 @@ describe('usePopupWindow', () => {
     expect(fake.doc.querySelector('[data-popup-window-root]')).not.toBeNull()
   })
 
+  it('writes a doctype into the about:blank document, so it lays out in standards mode', () => {
+    const write = vi.spyOn(fake.doc, 'write')
+    const getApi = renderHarness()
+    act(() => {
+      getApi().open()
+    })
+    expect(write).toHaveBeenCalledWith(expect.stringMatching(/^<!DOCTYPE html>/))
+    expect(fake.doc.body.textContent).toContain('hello from popup')
+  })
+
   it('focuses instead of reopening when already open', () => {
     const getApi = renderHarness()
     act(() => {
@@ -244,10 +254,12 @@ describe('usePopupWindow', () => {
     })
     expect(page.querySelector('[data-popup-window-root]')).toBeNull()
 
+    const write = vi.spyOn(page, 'write')
     fake.finishLoading()
     act(() => {
       vi.advanceTimersByTime(100)
     })
+    expect(write).not.toHaveBeenCalled()
     expect(page.title).toBe('Loaded panel')
     expect(page.body.textContent).toContain('hello from popup')
     expect(onOpen).toHaveBeenCalledWith(fake.win)

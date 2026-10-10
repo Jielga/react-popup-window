@@ -111,12 +111,15 @@ const { open, Popup } = usePopupWindow({ title: 'Panel', url: '/popup.html' })
 
 `isOpen` turns `true` as soon as the window opens; `Popup` renders once the page has loaded.
 Important: do not point `url` at a route of the app, as that starts a second copy of the app inside the popup.
+Start the page with `<!doctype html>`: without it, the popup lays out in quirks mode.
 If the page redirects to another origin, the popup closes and `onBlocked` is called.
 
 ## How it works
 
 The hook opens a same-origin window, `about:blank` by default or the page
-set with `url`, and creates a container element in its body. The `Popup` component renders its children with
+set with `url`, and creates a container element in its body. The
+`about:blank` document is written with an HTML5 doctype first, so the popup
+lays out in standards mode, like the opener. The `Popup` component renders its children with
 `createPortal` into that container. A portal changes where DOM output is
 placed, not where the components sit in the tree, so popup content
 participates in the calling tree's state, context, and event system. React

@@ -103,7 +103,8 @@ const { open, Popup } = usePopupWindow({ title: 'Panel', url: '/popup.html' })
 ```
 
 `isOpen` turns `true` as soon as the window opens; `Popup` renders once the
-page has loaded. Important: do not point `url` at a route of the app, as that
+page has loaded. Start the page with `<!doctype html>`, or the popup lays out
+in quirks mode. Important: do not point `url` at a route of the app, as that
 starts a second copy of the app inside the popup. If the page redirects to
 another origin, the popup closes and `onBlocked` is called.
 

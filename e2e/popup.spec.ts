@@ -191,6 +191,14 @@ test('dark mode toggled in the main window propagates to the popup', async ({ pa
   expect(bg).toBe('rgb(20, 24, 31)') // --bg in dark mode
 })
 
+for (const openTestId of ['open-counter', 'open-results']) {
+  test(`${openTestId}: popup document lays out in standards mode`, async ({ page }) => {
+    const popup = await openPopup(page, openTestId)
+    await expect(popup.locator('[data-popup-window-root] > *').first()).toBeAttached()
+    expect(await popup.evaluate(() => document.compatMode)).toBe('CSS1Compat')
+  })
+}
+
 test('rules inserted into an opener <style> after opening apply in the popup at once', async ({
   page,
 }) => {
