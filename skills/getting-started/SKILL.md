@@ -11,7 +11,7 @@ description: >
 metadata:
   type: core
   library: '@jielga/react-popup-window'
-  library_version: '0.2.1'
+  library_version: '0.3.0'
 sources:
   - 'Jielga/react-popup-window:README.md'
   - 'Jielga/react-popup-window:src/usePopupWindow.ts'
