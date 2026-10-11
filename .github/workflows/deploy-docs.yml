@@ -1,3 +1,6 @@
+# This repo is archived; the package lives in https://github.com/Jielga/react
+# under packages/react-popup-window. The Pages site here only redirects to the
+# new documentation URL.
 name: Deploy docs
 
 on:
@@ -22,15 +25,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run docs:build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist-docs
+          path: redirect
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -1,6 +1,9 @@
 # @jielga/react-popup-window
 
-[![CI](https://github.com/jielga/react-popup-window/actions/workflows/ci.yml/badge.svg)](https://github.com/jielga/react-popup-window/actions/workflows/ci.yml)
+> **Moved.** This package now lives in [Jielga/react](https://github.com/Jielga/react/tree/main/packages/react-popup-window), the monorepo for the `@jielga` React packages.
+> Documentation: <https://jielga.github.io/react/react-popup-window/>.
+> Issues and pull requests go there; this repository is archived and kept for history.
+
 [![npm](https://img.shields.io/npm/v/%40jielga%2Freact-popup-window)](https://www.npmjs.com/package/@jielga/react-popup-window)
 [![license](https://img.shields.io/npm/l/%40jielga%2Freact-popup-window)](./LICENSE)
 
@@ -9,7 +12,7 @@ window. Content is rendered through a portal into the popup document, so it
 remains part of the calling tree: state, context, and event handlers work
 across windows without bridging.
 
-[Documentation and live examples](https://jielga.github.io/react-popup-window/)
+[Documentation and live examples](https://jielga.github.io/react/react-popup-window/)
 
 ## Features
 
